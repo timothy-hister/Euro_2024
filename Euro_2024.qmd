@@ -1,0 +1,372 @@
+---
+title: "Euro 2024"
+author: "Vanni Sartini"
+date: today
+format: 
+  html:
+    page-layout: full
+execute:
+  echo: false
+  warning: false
+  message: false
+  output: 'asis'
+params:
+  import_round_1: false
+  import_round_2: false
+  save_last_game: false
+editor_options: 
+  chunk_output_type: console
+---
+
+![](images/logo.jpg){width=50% fig-align='center'}
+
+```{r setup}
+pacman::p_load(tidyverse, hsiaR, gt, ggiraph, reactable, RColorBrewer, shiny, htmltools)
+source("tribbles.R")
+```
+
+```{r games}
+games_round_1 = readxl::read_xlsx("inputs/scores/round_1_scores.xlsx", range = "A7:J43") %>%
+  select(1, 2, 3, 4, 10) %>%
+  set_names(c("game_id", "date", "location", "team1", "team2")) %>%
+  mutate(game_id = as.integer(game_id)) %>%
+  mutate(date = ymd("2024-06" %,% word(date, 2)))
+
+games_round_2 = readxl::read_xlsx("inputs/scores/round_2_scores.xlsx") %>% as.matrix() %>% unname()
+games_round_2 = map(37:52, function(i) {
+  w = which(games_round_2 == i, arr.ind = T)
+  if (length(w) == 0) return()
+  m = games_round_2[w[1]:(w[1]+4), w[2]:(w[2]+1)]
+  #tibble(game_id = m[1,1], date = m[1,2], team1 = m[2,1], team2 = m[3,1], pred1 = m[2,2], pred2 = m[3,2], location = m[4,1])
+  tibble(game_id = m[1,1], date = m[1,2], team1 = ifelse(m[2,1] == 0, NA, m[2,1]), team2 = ifelse(m[3,1] == 0, NA, m[3,1]), location = m[4,1])
+}) %>%
+  bind_rows() %>%
+  mutate(game_id = as.integer(game_id)) %>%
+  mutate(date = ymd("2024-" %,% word(date, 2) %,% "-" %,% word(date,3)))
+
+games = bind_rows(games_round_1, games_round_2)
+games$round = c(rep(1L, 36), rep(2L, 15))
+games$points_available = games$round
+
+games = select(games, round, game_id, points_available, date, location, team1, team2) %>%
+  arrange(round, game_id)
+rm(games_round_1, games_round_2)
+```
+
+```{r import predictions}
+if (params$import_round_1) {
+  round_1_predictions = map(fs::dir_info("inputs/Round_1")$path, function(wb) {
+    x = readxl::read_xlsx(wb)
+    player_id = str_extract(wb, "(inputs/Round_1/)(\\d*)", group=2) %>% as.integer()
+    x = x[6:41, c(1, 2, 3, 4, 7, 10)]
+    names(x) = c("game_id", "date", "location", "team1", "prediction", "team2")
+    x = x %>% mutate(game_id = as.integer(game_id), player_id = player_id, .before="game_id")
+  }) %>%
+    bind_rows() %>%
+    select(player_id, game_id, prediction)
+  
+  saveRDS(round_1_predictions, "round_1_predictions.Rds")
+} else round_1_predictions = readRDS("round_1_predictions.Rds")
+
+if (params$import_round_2) {
+  round_2_predictions = map(fs::dir_info("inputs/Round_1")$path, function(wb) {
+    x = readxl::read_xlsx(wb)
+    player_id = str_extract(wb, "(inputs/Round_1/)(\\d*)", group=2) %>% as.integer()
+    x = x[6:41, c(1, 2, 3, 4, 7, 10)]
+    names(x) = c("game_id", "date", "location", "team1", "prediction", "team2")
+    x = x %>% mutate(game_id = as.integer(game_id), player_id = player_id, .before="game_id")
+  }) %>%
+    bind_rows()
+  
+  saveRDS(round_2_predictions, "round_2_predictions.Rds")
+} else if (fs::file_exists("round_2_predictions.Rds")) round_2_predictions = readRDS("round_2_predictions.Rds") else round_2_predictions = games %>%
+  filter(round > 1) %>%
+  cross_join(players) %>%
+  select(player_id, game_id) %>%
+  mutate(prediction = NA)
+
+predictions = bind_rows(round_1_predictions, round_2_predictions) %>%
+  inner_join(games) %>%
+  select(player_id, round, game_id, prediction) %>%
+  arrange(player_id, round, game_id)
+
+round_1_scores = readxl::read_xlsx("inputs/scores/round_1_scores.xlsx") %>%
+  slice(6:41) %>%
+  select(c(1, 2, 3, 4, 7, 10)) %>%
+  set_names(c("game_id", "date", "location", "team1", "result", "team2")) %>%
+  mutate(game_id = as.integer(game_id)) %>%
+  na.omit() %>%
+  select(game_id, team1, team2, result)
+
+round_2_scores = if (fs::file_exists("inputs/scores/round_2_scores.xlsx")) readxl::read_xlsx("inputs/scores/round_2_scores.xlsx") else NULL
+round_2_scores = NULL # for now
+
+scores = if (is.null(round_2_scores)) round_1_scores else bind_rows(round_1_scores, round_2_scores)
+
+last_game = max(scores$game_id)
+prev_last_game = if (fs::file_exists("results/last_game.Rds")) read_rds("results/last_game.Rds") else 0L
+if (params$save_last_game) write_rds(last_game, "results/last_game.Rds")
+
+games = games %>% mutate(is_played = game_id <= last_game)
+last_round = games %>% filter(is_played) %>% tail(1) %>% pull(round)
+```
+
+```{r points}
+if (last_round == 1) points = games %>%
+  inner_join(scores) %>%
+  inner_join(predictions) %>%
+  select(player_id, round, game_id, prediction, result, points_available) %>%
+  arrange(player_id, round, game_id) %>%
+  #mutate(points = ifelse(prediction == result, points_available, 0L)) %>%
+  mutate(points = calc_points(round, prediction, result, points_available)) %>%
+  group_by(player_id) %>%
+  mutate(total_points = cumsum(points)) %>%
+  ungroup() %>%
+  group_by(game_id) %>%
+  mutate(rank = dense_rank(desc(total_points))) %>%
+  ungroup() %>%
+  select(player_id, round, game_id, points, total_points, rank)
+```
+
+```{r max points left}
+if (last_round == 1) {
+# max_points_left = players %>%
+#   select(player_id) %>%
+#   mutate(max_points_left = 
+#     games %>%
+#       filter(!is_played) %>%
+#       pull(points_available) %>%
+#       sum()
+#   )
+# } else NULL
+
+
+max_points_left = games %>%
+  inner_join(predictions) %>%
+  group_by(player_id) %>%
+  arrange(player_id, desc(game_id)) %>%
+  mutate(max_points_left = cumsum(points_available)) %>%
+  ungroup() %>%
+  select(player_id, round, game_id, max_points_left) %>%
+  arrange(player_id, game_id)
+}
+```
+
+```{r standings}
+standings = points %>%
+  na.omit() %>%
+  select(player_id, round, game_id, total_points, rank) %>%
+  arrange(game_id, rank) %>%
+  inner_join(max_points_left) %>%
+  mutate(max_points = total_points + max_points_left) %>%
+  select(game_id, player_id, rank, total_points, max_points)
+```
+
+```{r standings table}
+standings_tbl = standings %>%
+  group_by(player_id) %>%
+  arrange(game_id) %>%
+  slice_tail(n = 1) %>%
+  ungroup() %>%
+  select(player_id, total_points, rank, max_points) %>%
+  arrange(rank) %>%
+  left_join(
+    points %>%
+      filter(game_id == last_game) %>%
+      select(player_id, last_rank = rank)
+  ) %>%
+  mutate(last_rank = case_when(is.na(last_rank) ~ 1L, T ~ last_rank)) %>%
+  mutate(rank_change = last_rank - rank) %>%
+  inner_join(players) %>%
+  select(player_id, rank, rank_change, nickname, total_points, last_rank, max_points) %>%
+  rename(name = nickname)
+```
+
+```{r calculated players}
+calculated_players = bind_rows(
+  games %>%
+    inner_join(scores) %>%
+    mutate(prediction = 'tie') %>%
+    select(round, game_id, prediction, result, points_available) %>%
+    arrange(round, game_id) %>%
+    mutate(points = calc_points(round, prediction, result, points_available)) %>%
+    mutate(total_points = cumsum(points)) %>%
+    mutate(name = "Tie Guy"),
+  points %>%
+    filter(player_id == standings_tbl[[1,1]]) %>%
+    mutate(name = "The Best"),
+  points %>%
+    filter(player_id == standings_tbl[[nrow(standings_tbl),1]]) %>%
+    mutate(name = "The Worst"),
+  points %>%
+    group_by(round, game_id) %>%
+    summarise(total_points = mean(points)) %>%
+    mutate(name = "The Average")
+) %>%
+  select(round, game_id, name, total_points)
+```
+
+Good `r ifelse(hour(now()) < 12, 'morning', 'afternoon')` sports fans! 
+
+```{r opening blurb}
+if (games %>% filter(is_played, game_id > prev_last_game) %>% inner_join(scores) %>% nrow() > 0) {
+
+  cat("Since last time,", games %>% filter(is_played, game_id > prev_last_game) %>% inner_join(scores) %>% nrow(), "games have been played.<br>")
+  
+  games %>% 
+    filter(is_played, game_id > prev_last_game) %>% 
+    inner_join(scores) %>%
+    mutate(blurb = "In game" %,,% game_id %,% "," %,,% team1 %,,% "played" %,,% team2 %,% ", and" %,,% ifelse(result == "tie", "the result was a **tie**!", "the winner was **" %,% result %,% "**!")) %>%
+    pull(blurb) %>%
+    paste(collapse = "<br>") %>%
+    cat()
+}
+```
+
+
+# Standings
+
+```{r}
+standings_tbl %>%
+  select(-last_rank) %>%
+  reactable(
+    columns = list(
+      player_id = colDef(show = F),
+      rank = colDef(
+        header = "",
+        width = 50,
+        cell = function(value, index) {
+          arrow = standings_tbl$rank_change[index]
+          image = if (arrow == 0) icon("arrow-right") else if (arrow > 0) icon("arrow-up") else icon("arrow-down")
+          color = if_else(arrow > 0, "#008000", if_else(arrow == 0, "orange", "#e00000"))
+          div(
+            div(value, style = list(float = "left", fontWeight = 600)),
+            div(image, style = list(fontWeight = 600, color=color))
+          )
+        }
+      ),
+      rank_change = colDef(
+        show = F,
+        header = "",
+        cell = function(value) {
+          image = if (value == 0) icon("arrow-right") else if (value > 0) icon("arrow-up") else icon("arrow-down")
+          tagList(div(image))
+        },
+        style = function(value) {
+          color = if_else(value > 0, "#008000", if_else(value == 0, "orange", "#e00000"))
+          list(fontWeight = 600, color=color)
+        }
+      ),
+      total_points = colDef(
+        style = function(value) {
+          normalized = (value - min(standings_tbl$total_points)) / (max(standings_tbl$total_points) - min(standings_tbl$total_points))
+          color = PuOr_pal(normalized)
+          list(background = color, fontWeight = 'bold', color = 'white')
+        }
+      )
+    ),
+    searchable = TRUE, highlight = TRUE, onClick = 'expand', rowStyle = list(cursor = "pointer"), defaultExpanded = F,
+    details = function(index) {
+      tbl1 = suppressMessages(make_tbl1(index))
+      tbl2 = suppressMessages(make_tbl2(index))
+
+      div(
+        h4(standings_tbl$name[index] %,% "'s games", style = "margin: 10px;"),
+        div(tbl1, style = list(margin = "30px 45px")),
+        h4(standings_tbl$name[index] %,% "'s Graph", style = "margin: 10px;"),
+        div(plotTag(tbl2, alt='hello'), style = "margin: 30px 45px;")
+      )
+    }
+  )
+```
+
+# Fun Charts
+
+```{r}
+#| out-width: 90%
+#| 
+gg = players %>% 
+  inner_join(points) %>%
+  ggplot(aes(x = game_id, y = total_points, color = name)) +
+  geom_line_interactive(aes(tooltip = nickname, data_id = name)) + 
+  #geom_line() +
+  #geom_point_interactive(aes(tooltip = nickname, data_id = name)) +
+  geom_point() +
+  ggthemes::theme_clean() +
+  labs(x = "Game #", y = "Total Points", color = NULL) +
+  scale_x_continuous(breaks = round_1_scores$game_id) +
+  scale_color_brewer(palette = 'PuOr') + 
+  theme(legend.position = 'none')
+
+girafe(ggobj = gg, options = list(opts_hover(css = "stroke: black; stroke-width: 5px;"), opts_hover_inv(css = "opacity:0.1;")))
+```
+
+# Upcoming
+
+```{r upcoming games blurb}
+games %>%
+  filter(!is_played) %>%
+  arrange(game_id) %>%
+  slice_head(n = 3) %>%
+  ungroup() %>%
+  inner_join(predictions) %>%
+  group_by(player_id) %>%
+  inner_join(players) %>%
+  select(round, game_id, date, location, team1, team2, name, prediction) %>%
+  arrange(round, game_id, prediction) %>%
+  group_by(round, game_id, date, location, team1, team2, prediction) %>%
+  summarise(
+    n_players = n_distinct(name), 
+    players = paste(name, collapse = ", ")) %>%
+  ungroup() %>%
+  mutate(players = str_replace(players, ",(?=[^,]+$)", " and")) %>% 
+  mutate(game_blurb = ifelse(game_id != lag(game_id) | row_number() == 1, "<br><br>Game #" %,% game_id %,,% "will be played on" %,,% date %,,% "in" %,,% location %,,% "between **" %,% team1 %,% "** and **" %,% team2 %,% "**. ", "")) %>%
+  mutate(pred_blurb = n_players %,,% "people picked" %,,% prediction %,% ":" %,,% players %,% ".") %>%
+  mutate(blurb = game_blurb %,% pred_blurb) %>%
+  pull(blurb) %>%
+  paste(collapse = "") %>%
+  str_remove("^<br><br>") %>%
+  cat()
+```
+
+```{r}
+bind_rows(
+points %>%
+  inner_join(predictions) %>%
+  inner_join(scores) %>%
+  group_by(team1) %>%
+  summarise(points = sum(points)) %>%
+  rename(team = team1),
+points %>%
+  inner_join(predictions) %>%
+  inner_join(scores) %>%
+  group_by(team2) %>%
+  summarise(points = sum(points)) %>%
+  rename(team = team2),
+points %>%
+  inner_join(predictions) %>%
+  inner_join(scores) %>%
+  filter(prediction == "tie" & result == "tie") %>%
+  count() %>%
+  mutate(team = "tie", .before=1) %>%
+  rename(points = n)
+) %>%
+  group_by(team) %>%
+  summarise(points = sum(points)) %>%
+  arrange(desc(points)) %>%
+  ggplot(aes(label = team, size = points, color= team)) + 
+  geom_text_wordcloud(rm_outside = T) +
+  ggthemes::theme_clean()
+
+
+
+
+  rename(team = team1)
+
+
+
+  filter(result == prediction) %>%
+  count(team1)
+  
+```
+

@@ -1,0 +1,9 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+images
+inputs
+attic
+knits
+*.Rds
