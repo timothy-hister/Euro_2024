@@ -72,13 +72,16 @@ stopifnot(nrow(preds) == nrow(games) * nrow(players))
 rm(round_1_preds, round_2_preds)
 
 
+readxl::read_xlsx("https://github.com/timothy-hister/Euro_2024/blob/77b9f9f53c4301b795e670ff2f6997ea0a22900d/scores/round_1_scores.xlsx")
+
+
+
 
 if (params$import_scores) {
-  round_1_scores = if (params$github_scores) readr::read_csv("https://github.com/timothy-hister/Euro_2024/blob/dashboard/scores/round_1_scores.xlsx")
-
-    readxl::read_xlsx(here::here() %,% "/inputs/scores/round_1_scores.xlsx", range = "E8:F43", col_names = F)
+    round_1_scores = if (params$github_scores) readr::read_csv("https://raw.githubusercontent.com/timothy-hister/Euro_2024/dashboard/scores/round_1_scores.csv", skip = 5) else readr::read_csv(here::here() %,% "/scores/round_1_scores.csv", skip=5)
 
   if (nrow(round_1_scores) > 0) round_1_scores = round_1_scores %>%
+    select(5, 6) %>%
     set_names(c("score_1", "score_2")) %>%
     mutate(across(everything(), as.integer)) %>%
     mutate(game_id = row_number(), .before=1) %>%
