@@ -1,7 +1,7 @@
-players = readxl::read_excel("inputs/players.xlsx") %>%
+players = readxl::read_excel(here::here() %,% "/inputs/players.xlsx") %>%
   mutate(player_id = as.integer(player_id))
 
-countries = read.csv2("inputs/country.csv", header = T, sep = ",", ) %>%
+countries = read.csv2(here::here() %,% "/inputs/country.csv", header = T, sep = ",", ) %>%
   as_tibble() %>%
   select(1, 2) %>%
   set_names(c("country", "code")) %>%
