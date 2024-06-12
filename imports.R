@@ -71,11 +71,12 @@ preds = bind_rows(round_1_preds, round_2_preds) %>%
 stopifnot(nrow(preds) == nrow(games) * nrow(players))
 rm(round_1_preds, round_2_preds)
 
-googlesheets4::read_sheet("https://docs.google.com/spreadsheets/d/1oAbNZZdhnsgpjt7k43VXrkLje7wkRYbR/edit?pli=1&gid=1153176632#gid=1153176632")
 
 
 if (params$import_scores) {
-  round_1_scores = if (params$google_scores)   readxl::read_xlsx(here::here() %,% "/inputs/scores/round_1_scores.xlsx", range = "E8:F43", col_names = F)
+  round_1_scores = if (params$github_scores) readr::read_csv("https://github.com/timothy-hister/Euro_2024/blob/dashboard/scores/round_1_scores.xlsx")
+
+    readxl::read_xlsx(here::here() %,% "/inputs/scores/round_1_scores.xlsx", range = "E8:F43", col_names = F)
 
   if (nrow(round_1_scores) > 0) round_1_scores = round_1_scores %>%
     set_names(c("score_1", "score_2")) %>%
