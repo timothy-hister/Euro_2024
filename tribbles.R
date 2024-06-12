@@ -1,7 +1,7 @@
-players = readxl::read_excel("inputs/players.xlsx") %>%
+players = readxl::read_excel(here::here() %,% "/inputs/players.xlsx") %>%
   mutate(player_id = as.integer(player_id))
 
-countries = read.csv2("inputs/country.csv", header = T, sep = ",", ) %>%
+countries = read.csv2(here::here() %,% "/inputs/country.csv", header = T, sep = ",", ) %>%
   as_tibble() %>%
   select(1, 2) %>%
   set_names(c("country", "code")) %>%
@@ -13,30 +13,25 @@ countries = read.csv2("inputs/country.csv", header = T, sep = ",", ) %>%
   )
 
 PuOr_pal <- function(x) {
-  library()
-
   # Define the PuOr color palette with two colors
   palette <- brewer.pal(11, "PuOr")
-
   # Generate the color ramp between the two PuOr colors
   ramp <- colorRamp(palette, space = "rgb")
-
   # Generate the colors based on the input values using the PuOr color ramp
   colors <- ramp(x)
-
   return(rgb(colors, maxColorValue = 255))
 }
 
 print_flag = function(value) {
-  #if (value == "tie") return(div("tie"))
   if (is.na(value)) return("")
+  if (value == "tie") return(div(icon("arrows-left-right"), height="24px", alt="tie"))
   if (!value %in% countries$country) return(div(value))
 
   code = filter(countries, country == value) %>% pull(code) %>% tolower()
   flag_url = "https://cdn.jsdelivr.net/gh/lipis/flag-icon-css@master/flags/4x3/" %,% code %,% ".svg"
   #image = img(src = knitr::image_uri(flag_url), height = "24px", alt = flag)
   image = img(src = flag_url, height = "24px", alt=value)
-  d = div(image, style = "margin: 0px 10px;")
+  #d = div(image, style = "margin: 0px 10px;")
   d = div(image)
   return(d)
 }
@@ -52,32 +47,40 @@ calc_points = function(round, score_1, score_2, prediction_1, prediction_2, poin
   )
 }
 
-make_tbl1 = function(index) {
-  player_table = players %>%
-    filter(player_id == standings_tbl$player_id[index]) %>%
+make_inner_tbl1 = function(tbl) {
+  player_table = tbl %>%
     inner_join(preds) %>%
     inner_join(games) %>%
     left_join(scores) %>%
     left_join(points) %>%
-    mutate(game = NA) %>%
-    select(round, game_id, date, location, game, pred_winner, result, points, total_points, rank, team_1, team_2)
+    mutate(game = case_when(is.na(team_1) ~ NA_character_, T ~ team_1 %,,% "-" %,,% team_2)) %>%
+    mutate(pred_game = case_when(is.na(pred_team_1) ~ NA_character_, T ~ pred_team_1 %,,% "-" %,,% pred_team_2)) %>%
+    mutate(pred_result = case_when(round == 1 ~ pred_score_1 %,% " - " %,% pred_score_2, T ~ pred_winner)) %>%
+    mutate(result = case_when(!is_played ~ NA_character_, round == 1 ~ score_1 %,% " - " %,% score_2, T ~ result)) %>%
+    select(round, game_id, date, location, game, pred_game, pred_result, result, points_available, points, total_points, rank)
 
   reactable(player_table,
-    outlined = TRUE, highlight = TRUE, fullWidth = FALSE, columns = list(
-      team_1 = colDef(show = F),
-      team_2 = colDef(show = F),
-      game = colDef(na = "", cell = function(value, index) {
-
+    outlined = TRUE, highlight = TRUE, searchable = TRUE, fullWidth = FALSE, columns = list(
+      game_id = colDef(header = "game #"),
+      location = colDef(minWidth = 200),
+      game = colDef(na = "", cell = function(value) {
         div(style = "display: flex; align-items: center;",
-            print_flag(player_table$team_1[index]),
-            if (!is.na(player_table$team_1[index])) div("V", style = "fontWeight: 600; margin: 0 10px;"),
-            print_flag(player_table$team_2[index])
+            print_flag(word(value, 1)),
+            if (!is.na(value)) div("V", style = "fontWeight: 600; margin: 0 10px;"),
+            print_flag(word(value, 3))
         )
-      },
-      minWidth = 150,
-      ),
-      pred_winner = colDef(na = "", cell = function(value) print_flag(value)),
-      result = colDef(na = "", cell = function(value) print_flag(value))
+      }, minWidth = 150),
+      pred_game = colDef(na = "", show = last_round > 1, cell = function(value) {
+        div(style = "display: flex; align-items: center;",
+            print_flag(word(value, 1)),
+            if (!is.na(value)) div("V", style = "fontWeight: 600; margin: 0 10px;"),
+            print_flag(word(value, 2))
+        )
+      }, minWidth = 150),
+      pred_result = colDef(header = "predicted result", na = "", cell = function(value, index) if (player_table$round[index] == 1) value else print_flag(value)),
+      result = colDef(na = "", cell = function(value, index) if (is.na(value)) "" else if (player_table$round[index] == 1) value else print_flag(value)),
+      points_available = colDef(header = "points available"),
+      total_points = colDef(header = "total points")
     )
   )
 }
