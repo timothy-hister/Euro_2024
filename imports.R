@@ -1,0 +1,144 @@
+if (params$import_games) {
+  games_round_1 = readxl::read_xlsx(here::here() %,% "/inputs/scores/round_1_scores.xlsx", range = "A8:G43", col_names = F) %>%
+    set_names(c("game_id", "date", "location", "team_1", "score_1", "score_2", "team_2")) %>%
+    mutate(game_id = as.integer(game_id)) %>%
+    mutate(date = ymd("2024-06" %,% word(date, 2))) %>%
+    mutate(across(starts_with("score"), as.integer))
+
+  games_round_2 = readxl::read_xlsx(here::here() %,% "/inputs/scores/round_2_scores.xlsx") %>% as.matrix() %>% unname()
+  games_round_2 = map(37:52, function(i) {
+    w = which(games_round_2 == i, arr.ind = T)
+    if (length(w) == 0) return()
+    m = games_round_2[w[1]:(w[1]+4), w[2]:(w[2]+1)]
+    #tibble(game_id = m[1,1], date = m[1,2], team_1 = m[2,1], team_2 = m[3,1], pred1 = m[2,2], pred2 = m[3,2], location = m[4,1])
+    tibble(game_id = m[1,1], date = m[1,2], team_1 = ifelse(m[2,1] == 0, NA, m[2,1]), team_2 = ifelse(m[3,1] == 0, NA, m[3,1]), location = m[4,1])
+  }) %>%
+    bind_rows() %>%
+    mutate(game_id = as.integer(game_id)) %>%
+    mutate(date = ymd("2024-" %,% word(date, 2) %,% "-" %,% word(date,3)))
+
+  games = bind_rows(games_round_1, games_round_2)
+  games$round = c(rep(1L, 36L), rep(2L, 8L), rep(3L, 4L), rep(4L, 2L), 5L)
+  games$points_available = map_int(games$round, ~switch(., 3L, 4L, 6L, 8L, 10L))
+
+  games = select(games, round, game_id, points_available, date, location, team_1, team_2) %>%
+    arrange(round, game_id)
+
+  stopifnot(max(games_round_1$game_id) + 1 == min(games_round_2$game_id))
+  rm(games_round_1, games_round_2)
+
+  last_games_of_day = c(0, games %>% group_by(date) %>% slice_tail(n=1) %>% pull(game_id))
+  games = games %>% rowwise() %>% mutate(prev_game_id = as.integer(max(last_games_of_day[last_games_of_day < game_id]))) %>% ungroup()
+
+  saveRDS(games, here::here() %,% "/results/games.Rds")
+} else games = readRDS(here::here() %,% "/results/games.Rds")
+
+all_teams = c(games$team_1, games$team_2) %>% unique() %>% sort()
+all_locations = sort(unique(games$location))
+
+if (params$import_round_1) {
+  round_1_preds = map(fs::dir_info(here::here() %,% "/inputs/Round_1")$path, function(wb) {
+    player_id = str_extract(wb, here::here() %,% "/(inputs/Round_1/)(\\d*)", group=2) %>% as.integer()
+    readxl::read_xlsx(wb, range = "E8:F43", col_names = F) %>%
+      set_names(c("pred_score_1", "pred_score_2")) %>%
+      mutate(across(everything(), as.integer)) %>%
+      mutate(game_id = row_number()) %>%
+      mutate(player_id = player_id) %>%
+      inner_join(games) %>%
+      mutate(pred_winner = case_when(pred_score_1 > pred_score_2 ~ team_1, pred_score_1 < pred_score_2 ~ team_2, T ~ "tie")) %>%
+      select(round, game_id, player_id, starts_with("pred"))
+  }) %>%
+    bind_rows()
+  saveRDS(round_1_preds, here::here() %,% "/results/round_1_preds.Rds")
+} else round_1_preds = readRDS(here::here() %,% "/results/round_1_preds.Rds")
+
+# round_2_preds = map(fs::dir_info(here::here() %,% "/inputs/Round_1")$path, function(wb) {
+#   x = readxl::read_xlsx(wb)
+#   player_id = str_extract(wb, here::here() %,% "/(inputs/Round_1/)(\\d*)", group=2) %>% as.integer()
+#   x = x[6:41, c(1, 2, 3, 4, 7, 10)]
+#   names(x) = c("game_id", "date", "location", "team_1", "pred", "team_2")
+#   x = x %>% mutate(game_id = as.integer(game_id), player_id = player_id, .before="game_id")
+# }) %>%
+#   bind_rows()
+round_2_preds = games %>%
+  filter(round > 1) %>%
+  cross_join(players) %>%
+  select(round, player_id, game_id) %>%
+  mutate(pred_team_1 = NA_character_, pred_team_2 = NA_character_, pred_winner = NA_character_)
+
+preds = bind_rows(round_1_preds, round_2_preds) %>%
+  arrange(player_id, round, game_id)
+stopifnot(nrow(preds) == nrow(games) * nrow(players))
+rm(round_1_preds, round_2_preds)
+
+
+readxl::read_xlsx("https://github.com/timothy-hister/Euro_2024/blob/77b9f9f53c4301b795e670ff2f6997ea0a22900d/scores/round_1_scores.xlsx")
+
+
+
+
+if (params$import_scores) {
+    round_1_scores = if (params$github_scores) readr::read_csv("https://raw.githubusercontent.com/timothy-hister/Euro_2024/dashboard/scores/round_1_scores.csv", skip = 5) else readr::read_csv(here::here() %,% "/scores/round_1_scores.csv", skip=5)
+
+  if (nrow(round_1_scores) > 0) round_1_scores = round_1_scores %>%
+    select(5, 6) %>%
+    set_names(c("score_1", "score_2")) %>%
+    mutate(across(everything(), as.integer)) %>%
+    mutate(game_id = row_number(), .before=1) %>%
+    na.omit() %>%
+    inner_join(games) %>%
+    mutate(result = case_when(score_1 > score_2 ~ team_1, score_1 == score_2 ~ "tie", T ~ team_2)) %>%
+    select(round, game_id, team_1, team_2, score_1, score_2, result)
+
+  saveRDS(round_1_scores, here::here() %,% "/results/round_1_scores.Rds")
+
+  round_2_scores = if (fs::file_exists(here::here() %,% "/inputs/scores/round_2_scores.xlsx")) readxl::read_xlsx(here::here() %,% "/inputs/scores/round_2_scores.xlsx") else NULL
+  round_2_scores = NULL # for now
+} else {
+  round_1_scores = readRDS(here::here() %,% "/results/round_1_scores.Rds")
+  round_2_scores = NULL
+}
+
+scores = if (is.null(round_2_scores)) round_1_scores else ~bind_rows(round_1_scores, round_2_scores)
+rm(round_1_scores, round_2_scores)
+
+last_game = max(scores$game_id)
+games = games %>% mutate(is_played = game_id <= last_game)
+last_round = games %>% filter(is_played) %>% tail(1) %>% pull(round)
+prev_game = games %>% filter(game_id == last_game) %>% pull(prev_game_id) %>% as.integer()
+
+
+if (last_round == 1) points = games %>%
+  inner_join(scores) %>%
+  inner_join(preds) %>%
+  arrange(player_id, round, game_id) %>%
+  rowwise() %>%
+  mutate(points = calc_points(round, score_1, score_2, pred_score_1, pred_score_2, points_available)) %>%
+  group_by(player_id) %>%
+  mutate(total_points = cumsum(points)) %>%
+  ungroup() %>%
+  group_by(game_id) %>%
+  mutate(rank = dense_rank(desc(total_points))) %>%
+  ungroup() %>%
+  select(player_id, round, game_id, points, total_points, rank)
+
+if (last_round == 1) {
+  max_points_left = games %>%
+    inner_join(preds) %>%
+    group_by(player_id) %>%
+    arrange(player_id, desc(game_id)) %>%
+    mutate(max_points_left = cumsum(points_available) - points_available) %>%
+    ungroup() %>%
+    select(player_id, round, game_id, max_points_left) %>%
+    arrange(player_id, game_id)
+}
+
+
+
+standings = points %>%
+  na.omit() %>%
+  select(player_id, round, game_id, total_points, rank) %>%
+  arrange(game_id, rank) %>%
+  inner_join(max_points_left) %>%
+  mutate(max_points = total_points + max_points_left) %>%
+  select(game_id, player_id, rank, total_points, max_points)
