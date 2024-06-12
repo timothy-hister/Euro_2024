@@ -1,0 +1,13 @@
+name: Euro_2024
+title: Euro_2024
+username: djschoo
+account: djschoo
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 12173516
+bundleId: 8734611
+url: https://djschoo.shinyapps.io/Euro_2024/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: attic/api.R|attic/Euro_2024.qmd|attic/World_Cup_2022-12-19.html
