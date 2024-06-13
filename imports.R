@@ -1,21 +1,24 @@
 if (params$import_games) {
-  games_round_1 = readxl::read_xlsx(here::here() %,% "/inputs/scores/round_1_scores.xlsx", range = "A8:G43", col_names = F) %>%
-    set_names(c("game_id", "date", "location", "team_1", "score_1", "score_2", "team_2")) %>%
+  games_round_1 = readr::read_csv(params$scores_round_1_url, skip = 5) %>%
+    select(1, 2, 3, 4, 7) %>%
+    na.omit() %>%
+    set_names(c("game_id", "date", "location", "team_1", "team_2")) %>%
     mutate(game_id = as.integer(game_id)) %>%
-    mutate(date = ymd("2024-06" %,% word(date, 2))) %>%
-    mutate(across(starts_with("score"), as.integer))
+    mutate(date = ymd("2024-06" %,% word(date, 2)))
 
-  games_round_2 = readxl::read_xlsx(here::here() %,% "/inputs/scores/round_2_scores.xlsx") %>% as.matrix() %>% unname()
-  games_round_2 = map(37:52, function(i) {
-    w = which(games_round_2 == i, arr.ind = T)
-    if (length(w) == 0) return()
-    m = games_round_2[w[1]:(w[1]+4), w[2]:(w[2]+1)]
-    #tibble(game_id = m[1,1], date = m[1,2], team_1 = m[2,1], team_2 = m[3,1], pred1 = m[2,2], pred2 = m[3,2], location = m[4,1])
-    tibble(game_id = m[1,1], date = m[1,2], team_1 = ifelse(m[2,1] == 0, NA, m[2,1]), team_2 = ifelse(m[3,1] == 0, NA, m[3,1]), location = m[4,1])
-  }) %>%
-    bind_rows() %>%
-    mutate(game_id = as.integer(game_id)) %>%
-    mutate(date = ymd("2024-" %,% word(date, 2) %,% "-" %,% word(date,3)))
+  if (is.null(params$scores_round_2_url)) games_round_2 = tibble(game_id = 37:51)
+
+  # games_round_2 = readxl::read_xlsx(here::here() %,% "/inputs/scores/round_2_scores.xlsx") %>% as.matrix() %>% unname()
+  # games_round_2 = map(37:52, function(i) {
+  #   w = which(games_round_2 == i, arr.ind = T)
+  #   if (length(w) == 0) return()
+  #   m = games_round_2[w[1]:(w[1]+4), w[2]:(w[2]+1)]
+  #   #tibble(game_id = m[1,1], date = m[1,2], team_1 = m[2,1], team_2 = m[3,1], pred1 = m[2,2], pred2 = m[3,2], location = m[4,1])
+  #   tibble(game_id = m[1,1], date = m[1,2], team_1 = ifelse(m[2,1] == 0, NA, m[2,1]), team_2 = ifelse(m[3,1] == 0, NA, m[3,1]), location = m[4,1])
+  # }) %>%
+  #   bind_rows() %>%
+  #   mutate(game_id = as.integer(game_id)) %>%
+  #   mutate(date = ymd("2024-" %,% word(date, 2) %,% "-" %,% word(date,3)))
 
   games = bind_rows(games_round_1, games_round_2)
   games$round = c(rep(1L, 36L), rep(2L, 8L), rep(3L, 4L), rep(4L, 2L), 5L)
@@ -71,33 +74,25 @@ preds = bind_rows(round_1_preds, round_2_preds) %>%
 stopifnot(nrow(preds) == nrow(games) * nrow(players))
 rm(round_1_preds, round_2_preds)
 
-
-readxl::read_xlsx("https://github.com/timothy-hister/Euro_2024/blob/77b9f9f53c4301b795e670ff2f6997ea0a22900d/scores/round_1_scores.xlsx")
-
-
-
-
-if (params$import_scores) {
-    round_1_scores = if (params$github_scores) readr::read_csv("https://raw.githubusercontent.com/timothy-hister/Euro_2024/dashboard/scores/round_1_scores.csv", skip = 5) else readr::read_csv(here::here() %,% "/scores/round_1_scores.csv", skip=5)
-
-  if (nrow(round_1_scores) > 0) round_1_scores = round_1_scores %>%
-    select(5, 6) %>%
-    set_names(c("score_1", "score_2")) %>%
-    mutate(across(everything(), as.integer)) %>%
-    mutate(game_id = row_number(), .before=1) %>%
-    na.omit() %>%
-    inner_join(games) %>%
-    mutate(result = case_when(score_1 > score_2 ~ team_1, score_1 == score_2 ~ "tie", T ~ team_2)) %>%
-    select(round, game_id, team_1, team_2, score_1, score_2, result)
+round_1_scores = readr::read_csv(params$scores_round_1_url, skip = 5)
+if (nrow(round_1_scores) > 0) round_1_scores = round_1_scores %>%
+  select(5, 6) %>%
+  set_names(c("score_1", "score_2")) %>%
+  mutate(across(everything(), as.integer)) %>%
+  mutate(game_id = row_number(), .before=1) %>%
+  na.omit() %>%
+  inner_join(games) %>%
+  mutate(result = case_when(score_1 > score_2 ~ team_1, score_1 == score_2 ~ "tie", T ~ team_2)) %>%
+  select(round, game_id, team_1, team_2, score_1, score_2, result)
 
   saveRDS(round_1_scores, here::here() %,% "/results/round_1_scores.Rds")
 
-  round_2_scores = if (fs::file_exists(here::here() %,% "/inputs/scores/round_2_scores.xlsx")) readxl::read_xlsx(here::here() %,% "/inputs/scores/round_2_scores.xlsx") else NULL
+  # round_2_scores = if (fs::file_exists(here::here() %,% "/inputs/scores/round_2_scores.xlsx")) readxl::read_xlsx(here::here() %,% "/inputs/scores/round_2_scores.xlsx") else NULL
   round_2_scores = NULL # for now
-} else {
-  round_1_scores = readRDS(here::here() %,% "/results/round_1_scores.Rds")
-  round_2_scores = NULL
-}
+# } else {
+#   round_1_scores = readRDS(here::here() %,% "/results/round_1_scores.Rds")
+#   round_2_scores = NULL
+# }
 
 scores = if (is.null(round_2_scores)) round_1_scores else ~bind_rows(round_1_scores, round_2_scores)
 rm(round_1_scores, round_2_scores)
@@ -142,3 +137,5 @@ standings = points %>%
   inner_join(max_points_left) %>%
   mutate(max_points = total_points + max_points_left) %>%
   select(game_id, player_id, rank, total_points, max_points)
+
+stopifnot(nrow(standings) == last_game * nrow(players))

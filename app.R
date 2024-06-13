@@ -3,7 +3,7 @@ pacman::p_load(tidyverse, gt, ggiraph, reactable, RColorBrewer, shiny, htmltools
 `%,%` = function(a,b) paste0(a,b)
 `%,,%` = function(a,b) paste(a,b)
 
-params = list(import_round_1 = F, import_round_2 = F, import_games = F, import_scores = F, google_scores = T)
+params = list(import_round_1 = T, import_round_2 = F, import_games = T, scores_round_1_url = "https://raw.githubusercontent.com/timothy-hister/Euro_2024/main/scores/round_1_scores.csv", scores_round_2_url = NULL)
 
 source(here::here() %,% "/tribbles.R", local = T)
 source(here::here() %,% "/imports.R", local = T)
@@ -23,27 +23,34 @@ server = function(input, output, session) {
 
   observe(if (!is.integer(input$as_of_game)) updateNumericInputIcon(session = session, inputId = "prev_as_of_game", value = last_game))
 
-  standings_tbl1 = reactive(
-    standings %>%
-      inner_join(players) %>%
-      inner_join(games) %>%
-      filter(name %in% input$players) %>%
-      filter(any(team_1 %in% input$teams, team_2 %in% input$teams)) %>%
-      filter(location %in% input$locations) %>%
-      filter(game_id == input$as_of_game) %>%
-      group_by(player_id) %>%
-      arrange(game_id) %>%
-      slice_tail(n = 1) %>%
-      ungroup() %>%
-      arrange(rank) %>%
-      left_join(points %>%
-          filter(game_id == prev_game) %>%
-          select(points, player_id, last_rank = rank)
-      ) %>%
-      mutate(last_rank = case_when(is.na(last_rank) ~ 1L, T ~ last_rank)) %>%
-      mutate(rank_change = last_rank - rank) %>%
-      select(player_id, rank, rank_change, nickname, total_points, last_rank, max_points) %>%
-      rename(name = nickname)
+  standings_tbl1 = reactive({
+    if (input$as_of_game == 0) {
+      mutate(players, rank = 1L, rank_change = 0L, total_points = 0L, last_rank = 1L, max_points = sum(games$points_available)) %>%
+        select(player_id, rank, rank_change, nickname, total_points, last_rank, max_points) %>%
+        rename(name = nickname)
+    } else {
+      standings %>%
+        inner_join(players) %>%
+        inner_join(games) %>%
+        filter(name %in% input$players) %>%
+        filter(any(team_1 %in% input$teams, team_2 %in% input$teams)) %>%
+        filter(location %in% input$locations) %>%
+        filter(game_id == input$as_of_game) %>%
+        group_by(player_id) %>%
+        arrange(game_id) %>%
+        slice_tail(n = 1) %>%
+        ungroup() %>%
+        arrange(rank) %>%
+        left_join(points %>%
+            filter(game_id == prev_game) %>%
+            select(points, player_id, last_rank = rank)
+        ) %>%
+        mutate(last_rank = case_when(is.na(last_rank) ~ 1L, T ~ last_rank)) %>%
+        mutate(rank_change = last_rank - rank) %>%
+        select(player_id, rank, rank_change, nickname, total_points, last_rank, max_points) %>%
+        rename(name = nickname)
+      }
+    }
   )
 
   #observe(print(standings_tbl1()))

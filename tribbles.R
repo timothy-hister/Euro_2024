@@ -57,7 +57,7 @@ make_inner_tbl1 = function(tbl) {
     mutate(pred_game = case_when(is.na(pred_team_1) ~ NA_character_, T ~ pred_team_1 %,,% "-" %,,% pred_team_2)) %>%
     mutate(pred_result = case_when(round == 1 ~ pred_score_1 %,% " - " %,% pred_score_2, T ~ pred_winner)) %>%
     mutate(result = case_when(!is_played ~ NA_character_, round == 1 ~ score_1 %,% " - " %,% score_2, T ~ result)) %>%
-    select(round, game_id, date, location, game, pred_game, pred_result, result, points_available, points, total_points, rank)
+    select(round, points_available, game_id, date, location, game, pred_game, pred_result, result,  points, total_points, rank)
 
   reactable(player_table,
     outlined = TRUE, highlight = TRUE, searchable = TRUE, fullWidth = FALSE, columns = list(
