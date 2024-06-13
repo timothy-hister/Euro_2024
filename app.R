@@ -1,4 +1,4 @@
-pacman::p_load(tidyverse, gt, ggiraph, reactable, RColorBrewer, shiny, htmltools, bslib, shinyWidgets, shinymanager, googlesheets4)
+pacman::p_load(tidyverse, gt, ggiraph, reactable, RColorBrewer, shiny, htmltools, bslib, shinyWidgets, shinymanager)
 
 `%,%` = function(a,b) paste0(a,b)
 `%,,%` = function(a,b) paste(a,b)
@@ -20,6 +20,9 @@ server = function(input, output, session) {
   output$auth_output <- renderPrint({
     reactiveValuesToList(res_auth)
   })
+
+  observe(shinyjs::hide(id = "teams"))
+  observe(shinyjs::hide(id = "locations"))
 
   observe(if (!is.integer(input$as_of_game)) updateNumericInputIcon(session = session, inputId = "prev_as_of_game", value = last_game))
 
@@ -54,7 +57,8 @@ server = function(input, output, session) {
     }
   )
 
-  #observe(print(standings_tbl1()))
+  print(standings)
+  observe(print(standings_tbl1()))
 
   t1 = reactive(
     standings_tbl1() %>%
@@ -76,14 +80,15 @@ server = function(input, output, session) {
             }
           ),
           rank_change = colDef(show = F),
-          total_points = colDef(
+          total_points = colDef(header = "total points",
             style = function(value) {
               if (length(unique(standings_tbl1()$total_points)) == 1) return(list(fontWeight = 600))
               normalized = (value - min(standings_tbl1()$total_points)) / (max(standings_tbl1()$total_points) - min(standings_tbl1()$total_points))
               color = PuOr_pal(normalized)
               list(background = color, fontWeight = 600, color = 'white')
             }
-          )
+          ),
+          max_points = colDef(header = "maximum possible points")
         ),
         searchable = TRUE, highlight = TRUE, onClick = 'expand', rowStyle = list(cursor = "pointer"), defaultExpanded = F,
         details = function(index) {
@@ -100,6 +105,7 @@ server = function(input, output, session) {
       inner_join(players %>% filter(name %in% input$players)) %>%
       inner_join(points) %>%
       filter(game_id <= input$as_of_game) %>%
+      #mutate(name = factor(name, ordered = T)) %>%
       ggplot(aes(x = game_id, y = total_points, color = name)) +
       geom_line_interactive(aes(tooltip = nickname, data_id = name)) +
       geom_point() +
