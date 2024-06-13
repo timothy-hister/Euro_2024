@@ -16,11 +16,11 @@ ui = page_sidebar(
   title = "Euro 2024",
   sidebar = list(
     img(src='logo.jpg'),
-    pickerInput("players", "Choose Your Players", choices = players$name, selected = players$name, multiple = T, options = pickerOptions(container = "body"), width = "100%"),
-    numericInputIcon("as_of_game", "Choose The Game Number", value = last_game, min = 0, max = max(games$game_id)),
-    p("For the supremely dorky of you..."),
-    pickerInput("teams", "Choose Your Teams", choices = all_teams, selected = all_teams, multiple = T, options = pickerOptions(container = "body"), width = "100%"),
-    pickerInput("locations", "Choose Your Locations", choices = all_locations, selected = all_locations, multiple = T, options = pickerOptions(container = "body"), width = "100%")
+    virtualSelectInput("players", "Choose Your Players", choices = players$name, selected = players$name, multiple = T, width = "100%", dropboxWrapper = "body"),
+    sliderTextInput("as_of_game", "Choose The Game Number", choices = 0:last_game, selected = last_game)
+    # p("For the supremely dorky of you..."),
+    # pickerInput("teams", "Choose Your Teams", choices = all_teams, selected = all_teams, multiple = T, options = pickerOptions(container = "body"), width = "100%"),
+    # pickerInput("locations", "Choose Your Locations", choices = all_locations, selected = all_locations, multiple = T, options = pickerOptions(container = "body"), width = "100%")
   ),
   navset_card_underline(
     title = "",

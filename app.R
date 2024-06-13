@@ -25,7 +25,8 @@ server = function(input, output, session) {
 
   standings_tbl1 = reactive({
     if (input$as_of_game == 0) {
-      mutate(players, rank = 1L, rank_change = 0L, total_points = 0L, last_rank = 1L, max_points = sum(games$points_available)) %>%
+      filter(players, name %in% input$players) %>%
+      mutate(rank = 1L, rank_change = 0L, total_points = 0L, last_rank = 1L, max_points = sum(games$points_available)) %>%
         select(player_id, rank, rank_change, nickname, total_points, last_rank, max_points) %>%
         rename(name = nickname)
     } else {
