@@ -23,15 +23,11 @@ if (params$import_games) {
   games = bind_rows(games_round_1, games_round_2)
   games$round = c(rep(1L, 36L), rep(2L, 8L), rep(3L, 4L), rep(4L, 2L), 5L)
   games$points_available = map_int(games$round, ~switch(., 3L, 4L, 6L, 8L, 10L))
-
   games = select(games, round, game_id, points_available, date, location, team_1, team_2) %>%
     arrange(round, game_id)
 
   stopifnot(max(games_round_1$game_id) + 1 == min(games_round_2$game_id))
   rm(games_round_1, games_round_2)
-
-  last_games_of_day = c(0, games %>% group_by(date) %>% slice_tail(n=1) %>% pull(game_id))
-  games = games %>% rowwise() %>% mutate(prev_game_id = as.integer(max(last_games_of_day[last_games_of_day < game_id]))) %>% ungroup()
 
   saveRDS(games, here::here() %,% "/results/games.Rds")
 } else games = readRDS(here::here() %,% "/results/games.Rds")
@@ -71,7 +67,8 @@ round_2_preds = games %>%
 
 preds = bind_rows(round_1_preds, round_2_preds) %>%
   arrange(player_id, round, game_id)
-stopifnot(nrow(preds) == nrow(games) * nrow(players))
+
+stopifnot(preds |> count(player_id) |> pull(n) |> unique() == nrow(games))
 rm(round_1_preds, round_2_preds)
 
 round_1_scores = readr::read_csv(params$scores_round_1_url, skip = 5) %>%
@@ -99,8 +96,12 @@ rm(round_1_scores, round_2_scores)
 last_game = if (nrow(scores) > 0) max(scores$game_id) else 0L
 games = games %>% mutate(is_played = game_id <= last_game)
 last_round = if (nrow(scores) > 0) games %>% filter(is_played) %>% tail(1) %>% pull(round) else 0L
-prev_game = if (nrow(scores) > 0) games %>% filter(game_id == last_game) %>% pull(prev_game_id) %>% as.integer() else 0L
 
+last_games_of_day = c(0, games %>% group_by(date) %>% slice_tail(n=1) %>% pull(game_id))
+last_games_of_day = games %>% rowwise() %>% mutate(prev_game_id = as.integer(max(last_games_of_day[last_games_of_day < game_id]))) %>% ungroup() %>% select(game_id, prev_game_id)
+
+
+# we can make these reactive????
 if (last_round %in% 0:1) points = games %>%
   inner_join(scores) %>%
   inner_join(preds) %>%
@@ -126,12 +127,12 @@ if (last_round %in% 0:1) {
     arrange(player_id, game_id)
 }
 
+
 standings = points %>%
   na.omit() %>%
-  select(player_id, round, game_id, total_points, rank) %>%
-  arrange(game_id, rank) %>%
+  inner_join(players) %>%
+  inner_join(games) %>%
+  arrange(game_id) %>%
   inner_join(max_points_left) %>%
   mutate(max_points = total_points + max_points_left) %>%
   select(game_id, player_id, rank, total_points, max_points)
-
-stopifnot(nrow(standings) == last_game * nrow(players))

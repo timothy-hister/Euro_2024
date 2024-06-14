@@ -1,5 +1,6 @@
 players = readxl::read_excel(here::here() %,% "/inputs/players.xlsx") %>%
   mutate(player_id = as.integer(player_id))
+stopifnot(sum(is.na(players)) == 0)
 
 countries = read.csv2(here::here() %,% "/inputs/country.csv", header = T, sep = ",", ) %>%
   as_tibble() %>%

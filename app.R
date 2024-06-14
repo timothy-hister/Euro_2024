@@ -3,16 +3,19 @@ pacman::p_load(tidyverse, gt, ggiraph, reactable, RColorBrewer, shiny, htmltools
 `%,%` = function(a,b) paste0(a,b)
 `%,,%` = function(a,b) paste(a,b)
 
-params = list(import_round_1 = T, import_round_2 = F, import_games = T, scores_round_1_url = "https://raw.githubusercontent.com/timothy-hister/Euro_2024/main/scores/round_1_scores.csv", scores_round_2_url = NULL)
+params = list(
+  import_round_1 = F, import_round_2 = F, import_games = T,
+  scores_round_1_url = "https://raw.githubusercontent.com/timothy-hister/Euro_2024/main/scores/round_1_scores.csv",
+  #scores_round_1_url = "scores/round_1_scores.csv",
+  scores_round_2_url = NULL)
 
 source(here::here() %,% "/tribbles.R", local = T)
 source(here::here() %,% "/imports.R", local = T)
 source(here::here() %,% "/ui.R", local = T)
 
-#ui = secure_app(ui)
+ui = secure_app(ui)
 
 server = function(input, output, session) {
-
   res_auth <- secure_server(
     check_credentials = check_credentials(credentials)
   )
@@ -24,40 +27,39 @@ server = function(input, output, session) {
   observe(shinyjs::hide(id = "teams"))
   observe(shinyjs::hide(id = "locations"))
 
-  observe(if (!is.integer(input$as_of_game)) updateNumericInputIcon(session = session, inputId = "prev_as_of_game", value = last_game))
+  prev_game = reactive(last_games_of_day %>% filter(game_id == req(input$as_of_game)) %>% pull(prev_game_id))
 
-  standings_tbl1 = reactive({
-    if (input$as_of_game == 0) {
-      filter(players, name %in% input$players) %>%
-      mutate(rank = 1L, rank_change = 0L, total_points = 0L, last_rank = 1L, max_points = sum(games$points_available)) %>%
-        select(player_id, rank, rank_change, nickname, total_points, last_rank, max_points) %>%
-        rename(name = nickname)
+  last_rank = reactive(if (req(input$as_of_game) == 0) {
+    select(players, player_id) %>% mutate(last_rank = 1L)
     } else {
       standings %>%
+        filter(game_id == prev_game()) %>%
+        select(player_id, last_rank = rank) # work????
+    }
+  )
+
+  #observe(print(last_rank()))
+  #observe(print(input$as_of_game))
+
+  standings_tbl1 = reactive(
+    if (req(input$as_of_game) == 0) {
+      return(tibble(player_id = filter(players, name %in% input$players) %>% pull(player_id), rank = 1L, rank_change = 0L, name = filter(players, name %in% input$players) %>% pull(nickname), total_points = 0L, last_rank = 1L, max_points = sum(games$points_available)))
+    } else return(standings %>%
         inner_join(players) %>%
         inner_join(games) %>%
-        filter(name %in% input$players) %>%
-        filter(any(team_1 %in% input$teams, team_2 %in% input$teams)) %>%
-        filter(location %in% input$locations) %>%
         filter(game_id == input$as_of_game) %>%
         group_by(player_id) %>%
         arrange(game_id) %>%
         slice_tail(n = 1) %>%
         ungroup() %>%
         arrange(rank) %>%
-        left_join(points %>%
-            filter(game_id == prev_game) %>%
-            select(points, player_id, last_rank = rank)
-        ) %>%
+        left_join(last_rank()) %>%
         mutate(last_rank = case_when(is.na(last_rank) ~ 1L, T ~ last_rank)) %>%
         mutate(rank_change = last_rank - rank) %>%
         select(player_id, rank, rank_change, nickname, total_points, last_rank, max_points) %>%
         rename(name = nickname)
-      }
-    }
-  )
+  ))
 
-  print(standings)
   observe(print(standings_tbl1()))
 
   t1 = reactive(
@@ -108,52 +110,56 @@ server = function(input, output, session) {
       #mutate(name = factor(name, ordered = T)) %>%
       ggplot(aes(x = game_id, y = total_points, color = name)) +
       geom_line_interactive(aes(tooltip = nickname, data_id = name)) +
+      #geom_smooth_interactive(aes(tooltip = nickname, data_id = name)) +
       geom_point() +
       ggthemes::theme_clean() +
       labs(x = "Game #", y = "Total Points", color = NULL) +
       scale_x_continuous(breaks = scores$game_id) +
-      scale_color_brewer(palette = 'PuOr')
+      scale_color_viridis_d(option = 'rocket') +
+      theme(legend.position = 'none')
   )
+
+
 
   gg = reactive(girafe(ggobj = gg1(), options = list(opts_hover(css = "stroke: black; stroke-width: 5px;"), opts_hover_inv(css = "opacity:0.1;"))))
 
   output$graph = renderGirafe(gg())
 
 
-  txt = "<h3>Good" %,,% ifelse(hour(now()) < 12, 'morning', 'afternoon') %,,% "sports fans!</h3><br><br>"
-  txt = txt %,% "Since last time," %,,% (games %>% filter(is_played, game_id > prev_game) %>% inner_join(scores) %>% nrow()) %,,% "games have been played.<br>"
-  txt = txt %,% (games %>%
-      filter(is_played, game_id > prev_game) %>%
-      inner_join(scores) %>%
-      mutate(blurb = "In game" %,,% game_id %,% "," %,,% team_1 %,,% "played" %,,% team_2 %,% ", and" %,,% ifelse(result == "tie", "the result was a tie!", "the winner was " %,% result %,% "!")) %>%
-      pull(blurb) %>%
-      paste(collapse = "<br>"))
-
-  txt = txt %,% "<br><br>" %,% (games %>%
-    filter(!is_played) %>%
-    arrange(game_id) %>%
-    slice_head(n = 3) %>%
-    ungroup() %>%
-    inner_join(preds) %>%
-    group_by(player_id) %>%
-    inner_join(players) %>%
-    select(round, game_id, date, location, team_1, team_2, name, pred_winner) %>%
-    arrange(round, game_id, pred_winner) %>%
-    group_by(round, game_id, date, location, team_1, team_2, pred_winner) %>%
-    summarise(
-      n_players = n_distinct(name),
-      players = paste(name, collapse = ", ")) %>%
-    ungroup() %>%
-    mutate(players = str_replace(players, ",(?=[^,]+$)", " and")) %>%
-    mutate(game_blurb = ifelse(game_id != lag(game_id) | row_number() == 1, "<br><br>Game #" %,% game_id %,,% "will be played on" %,,% date %,,% "in" %,,% location %,,% "between **" %,% team_1 %,% "** and **" %,% team_2 %,% "**. ", "")) %>%
-    mutate(pred_blurb = n_players %,,% "people picked" %,,% pred_winner %,% ":" %,,% players %,% ".") %>%
-    mutate(blurb = game_blurb %,% pred_blurb) %>%
-    pull(blurb) %>%
-    paste(collapse = "") %>%
-    str_remove("^<br><br>"))
-
-
-  output$welcome = renderText(txt)
+  # txt = "<h3>Good" %,,% ifelse(hour(now()) < 12, 'morning', 'afternoon') %,,% "sports fans!</h3><br><br>"
+  # txt = txt %,% "Since last time," %,,% (games %>% filter(is_played, game_id > prev_game) %>% inner_join(scores) %>% nrow()) %,,% "games have been played.<br>"
+  # txt = txt %,% (games %>%
+  #     filter(is_played, game_id > prev_game) %>%
+  #     inner_join(scores) %>%
+  #     mutate(blurb = "In game" %,,% game_id %,% "," %,,% team_1 %,,% "played" %,,% team_2 %,% ", and" %,,% ifelse(result == "tie", "the result was a tie!", "the winner was " %,% result %,% "!")) %>%
+  #     pull(blurb) %>%
+  #     paste(collapse = "<br>"))
+  #
+  # txt = txt %,% "<br><br>" %,% (games %>%
+  #   filter(!is_played) %>%
+  #   arrange(game_id) %>%
+  #   slice_head(n = 3) %>%
+  #   ungroup() %>%
+  #   inner_join(preds) %>%
+  #   group_by(player_id) %>%
+  #   inner_join(players) %>%
+  #   select(round, game_id, date, location, team_1, team_2, name, pred_winner) %>%
+  #   arrange(round, game_id, pred_winner) %>%
+  #   group_by(round, game_id, date, location, team_1, team_2, pred_winner) %>%
+  #   summarise(
+  #     n_players = n_distinct(name),
+  #     players = paste(name, collapse = ", ")) %>%
+  #   ungroup() %>%
+  #   mutate(players = str_replace(players, ",(?=[^,]+$)", " and")) %>%
+  #   mutate(game_blurb = ifelse(game_id != lag(game_id) | row_number() == 1, "<br><br>Game #" %,% game_id %,,% "will be played on" %,,% date %,,% "in" %,,% location %,,% "between **" %,% team_1 %,% "** and **" %,% team_2 %,% "**. ", "")) %>%
+  #   mutate(pred_blurb = n_players %,,% "people picked" %,,% pred_winner %,% ":" %,,% players %,% ".") %>%
+  #   mutate(blurb = game_blurb %,% pred_blurb) %>%
+  #   pull(blurb) %>%
+  #   paste(collapse = "") %>%
+  #   str_remove("^<br><br>"))
+  #
+  #
+  # output$welcome = renderText(txt)
 
 
 

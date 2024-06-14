@@ -5,9 +5,9 @@ account: djschoo
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 12173516
-bundleId: 8734611
+bundleId: 8739957
 url: https://djschoo.shinyapps.io/Euro_2024/
 version: 1
 asMultiple: FALSE
 asStatic: FALSE
-ignoredFiles: attic/api.R|attic/Euro_2024.qmd|attic/World_Cup_2022-12-19.html
+ignoredFiles: attic/api.R|attic/Euro_2024.qmd|attic/round_2_scores.xlsx|attic/World_Cup_2022-12-19.html|scores/round_1_scores.csv
