@@ -15,7 +15,8 @@ ui = page_sidebar(
   title = "Euro 2024",
   sidebar = list(
     img(src='logo.jpg'),
-    virtualSelectInput("players", "Choose Your Players", choices = players$name, selected = players$name, multiple = T, width = "100%", dropboxWrapper = "body"),
+    #virtualSelectInput("players", "Choose Your Players", choices = players$name, selected = players$name, multiple = T, width = "100%", dropboxWrapper = "body"),
+    virtualSelectInput("players", "Choose Your Players", choices = players[1:3]$name, selected = players[1:3]$name, multiple = T, width = "100%", dropboxWrapper = "body"),
     sliderTextInput("as_of_game", "Choose The Game Number", choices = 0:last_game, selected = last_game),
     #p("For the supremely dorky of you..."),
     pickerInput("teams", "Choose Your Teams", choices = all_teams, selected = all_teams, multiple = T, options = pickerOptions(container = "body"), width = "100%"),
@@ -24,7 +25,8 @@ ui = page_sidebar(
   navset_card_underline(
     title = "",
     #nav_panel("Welcome", uiOutput("welcome")),
-    nav_panel("Standings", reactableOutput("standings_tbl")),
-    nav_panel("Fun Graph", girafeOutput("graph"))
+    nav_panel("Standings", withSpinner(reactableOutput("standings_tbl"))),
+    nav_panel("Fun Graph", withSpinner(girafeOutput("graph")))
+    #nav_panel("Player Pages", withSpinner(uiOutput("players")), value = "p3")
   )
 )

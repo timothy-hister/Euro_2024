@@ -1,3 +1,20 @@
+players = readxl::read_excel(here::here() %,% "/inputs/players.xlsx") %>%
+  mutate(player_id = as.integer(player_id))
+stopifnot(sum(is.na(players)) == 0)
+
+countries = read.csv2(here::here() %,% "/inputs/country.csv", header = T, sep = ",", ) %>%
+  as_tibble() %>%
+  select(1, 2) %>%
+  set_names(c("country", "code")) %>%
+  mutate(code = str_extract(code, "[A-Z]+")) %>%
+  bind_rows(
+    tibble_row(country = "Scotland", code = "gb-sct"),
+    tibble_row(country = "England", code = "gb-eng"),
+    tibble_row(country = "Türkiye", code = "TR")
+  )
+
+
+
 if (params$import_games) {
   games_round_1 = readr::read_csv(params$scores_round_1_url, skip = 5) %>%
     select(1, 2, 3, 4, 7) %>%

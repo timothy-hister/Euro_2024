@@ -1,4 +1,4 @@
-pacman::p_load(tidyverse, gt, ggiraph, reactable, RColorBrewer, shiny, htmltools, bslib, shinyWidgets, shinymanager)
+pacman::p_load(tidyverse, gt, ggiraph, reactable, RColorBrewer, shiny, htmltools, bslib, shinyWidgets, shinymanager, shinycssloaders)
 
 `%,%` = function(a,b) paste0(a,b)
 `%,,%` = function(a,b) paste(a,b)
@@ -7,22 +7,26 @@ params = list(
   import_round_1 = F, import_round_2 = F, import_games = T,
   scores_round_1_url = "https://raw.githubusercontent.com/timothy-hister/Euro_2024/main/scores/round_1_scores.csv",
   #scores_round_1_url = "scores/round_1_scores.csv",
-  scores_round_2_url = NULL)
-
-source(here::here() %,% "/tribbles.R", local = T)
-source(here::here() %,% "/imports.R", local = T)
-source(here::here() %,% "/ui.R", local = T)
-
-ui = secure_app(ui)
-
-server = function(input, output, session) {
-  res_auth <- secure_server(
-    check_credentials = check_credentials(credentials)
+  scores_round_2_url = NULL,
+  authenticate = T
   )
 
-  output$auth_output <- renderPrint({
-    reactiveValuesToList(res_auth)
-  })
+source(here::here() %,% "/functions.R", local = T)
+source(here::here() %,% "/calculations.R", local = T)
+source(here::here() %,% "/ui.R", local = T)
+
+if (params$authenticate) ui = secure_app(ui)
+
+server = function(input, output, session) {
+  if (params$authenticate) {
+    res_auth <- secure_server(
+      check_credentials = check_credentials(credentials)
+    )
+
+    output$auth_output <- renderPrint({
+      reactiveValuesToList(res_auth)
+    })
+  }
 
   observe(shinyjs::hide(id = "teams"))
   observe(shinyjs::hide(id = "locations"))
@@ -60,7 +64,7 @@ server = function(input, output, session) {
         rename(name = nickname)
   ))
 
-  observe(print(standings_tbl1()))
+  #observe(print(standings_tbl1()))
 
   t1 = reactive(
     standings_tbl1() %>%
@@ -119,11 +123,36 @@ server = function(input, output, session) {
       theme(legend.position = 'none')
   )
 
-
-
   gg = reactive(girafe(ggobj = gg1(), options = list(opts_hover(css = "stroke: black; stroke-width: 5px;"), opts_hover_inv(css = "opacity:0.1;"))))
 
   output$graph = renderGirafe(gg())
+
+  output$players = renderUI({
+    if (length(input$players) == 0) return()
+    accordions = map(input$players, function(player) {
+      #df = make_inner_tbl1(players %>% filter(name == player))
+      df = players %>%
+        filter(name == player) %>%
+        inner_join(preds) %>%
+        inner_join(games) %>%
+        left_join(scores) %>%
+        left_join(points) %>%
+        filter(game_id <= last_game)
+
+      vbs = list(
+        #value_box(title = "Rank", tail(df$rank, 1), theme='purple'),
+        value_box(title = "Rank", 1L, theme='purple', full_screen = TRUE, fill = TRUE, height = NULL),
+        value_box(title = "Rank", 1L, theme='teal', full_screen = TRUE, fill = TRUE, height = NULL)
+        #b2 = value_box(title = "Average Rank", mean(df$rank))
+      )
+
+      accordion_panel(title = player, layout_columns(!!!vbs))
+    })
+
+    accordion(accordions)
+  })
+
+
 
 
   # txt = "<h3>Good" %,,% ifelse(hour(now()) < 12, 'morning', 'afternoon') %,,% "sports fans!</h3><br><br>"
