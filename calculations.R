@@ -144,7 +144,6 @@ if (last_round %in% 0:1) {
     arrange(player_id, game_id)
 }
 
-
 standings = points %>%
   na.omit() %>%
   inner_join(players) %>%
@@ -153,3 +152,13 @@ standings = points %>%
   inner_join(max_points_left) %>%
   mutate(max_points = total_points + max_points_left) %>%
   select(game_id, player_id, rank, total_points, max_points)
+
+standings = bind_rows(
+  players %>%
+    select(player_id) %>%
+    mutate(game_id = 0L, .before=1) %>%
+    mutate(rank = 1L, total_points = 0L, max_points = sum(games$points_available)),
+  standings
+)
+
+inner_tables_list = map(players$player_id, function(player) suppressMessages(make_inner_tbl1(player)))

@@ -1,21 +1,16 @@
+is_for_shinyapps = F
+
+params = list(import_round_1 = F, import_round_2 = F, import_games = F, scores_round_2_url = NULL)
+params = if (is_for_shinyapps) append(params, list(scores_round_1_url = "https://raw.githubusercontent.com/timothy-hister/Euro_2024/main/scores/round_1_scores.csv", authenticate = T)) else append(params, list(scores_round_1_url = "scores/round_1_scores.csv", authenticate = F))
+
 pacman::p_load(tidyverse, gt, ggiraph, reactable, RColorBrewer, shiny, htmltools, bslib, shinyWidgets, shinymanager, shinycssloaders)
 
 `%,%` = function(a,b) paste0(a,b)
 `%,,%` = function(a,b) paste(a,b)
 
-params = list(
-  import_round_1 = F, import_round_2 = F, import_games = T,
-  scores_round_1_url = "https://raw.githubusercontent.com/timothy-hister/Euro_2024/main/scores/round_1_scores.csv",
-  #scores_round_1_url = "scores/round_1_scores.csv",
-  scores_round_2_url = NULL,
-  authenticate = T
-  )
-
 source(here::here() %,% "/functions.R", local = T)
 source(here::here() %,% "/calculations.R", local = T)
 source(here::here() %,% "/ui.R", local = T)
-
-if (params$authenticate) ui = secure_app(ui)
 
 server = function(input, output, session) {
   if (params$authenticate) {
@@ -42,15 +37,14 @@ server = function(input, output, session) {
     }
   )
 
-  #observe(print(last_rank()))
+  observe(print(last_rank()))
   #observe(print(input$as_of_game))
 
   standings_tbl1 = reactive(
-    if (req(input$as_of_game) == 0) {
-      return(tibble(player_id = filter(players, name %in% input$players) %>% pull(player_id), rank = 1L, rank_change = 0L, name = filter(players, name %in% input$players) %>% pull(nickname), total_points = 0L, last_rank = 1L, max_points = sum(games$points_available)))
-    } else return(standings %>%
+    standings %>%
         inner_join(players) %>%
-        inner_join(games) %>%
+        filter(name %in% input$players) %>%
+        left_join(games) %>%
         filter(game_id == input$as_of_game) %>%
         group_by(player_id) %>%
         arrange(game_id) %>%
@@ -62,47 +56,11 @@ server = function(input, output, session) {
         mutate(rank_change = last_rank - rank) %>%
         select(player_id, rank, rank_change, nickname, total_points, last_rank, max_points) %>%
         rename(name = nickname)
-  ))
-
-  #observe(print(standings_tbl1()))
-
-  t1 = reactive(
-    standings_tbl1() %>%
-      select(-last_rank) %>%
-      reactable(
-        columns = list(
-          player_id = colDef(show = F),
-          rank = colDef(
-            header = "",
-            width = 50,
-            cell = function(value, index) {
-              arrow = standings_tbl1()$rank_change[index]
-              image = if (arrow == 0) icon("arrow-right") else if (arrow > 0) icon("arrow-up") else icon("arrow-down")
-              color = if_else(arrow > 0, "#008000", if_else(arrow == 0, "orange", "#e00000"))
-              div(
-                div(value, style = list(float = "left", fontWeight = 600)),
-                div(image, style = list(fontWeight = 600, color=color))
-              )
-            }
-          ),
-          rank_change = colDef(show = F),
-          total_points = colDef(header = "total points",
-            style = function(value) {
-              if (length(unique(standings_tbl1()$total_points)) == 1) return(list(fontWeight = 600))
-              normalized = (value - min(standings_tbl1()$total_points)) / (max(standings_tbl1()$total_points) - min(standings_tbl1()$total_points))
-              color = PuOr_pal(normalized)
-              list(background = color, fontWeight = 600, color = 'white')
-            }
-          ),
-          max_points = colDef(header = "maximum possible points")
-        ),
-        searchable = TRUE, highlight = TRUE, onClick = 'expand', rowStyle = list(cursor = "pointer"), defaultExpanded = F,
-        details = function(index) {
-          tbl = players %>% filter(player_id == standings_tbl1()$player_id[index])
-          inner_tbl1 = suppressMessages(make_inner_tbl1(tbl))
-        }
-    )
   )
+
+  observe(print(standings_tbl1()))
+
+  t1 = reactive(reactable(standings_tbl1(), columns = t1_cols(standings_tbl1()), searchable = TRUE, highlight = TRUE, onClick = 'expand', rowStyle = list(cursor = "pointer"), defaultExpanded = F, details = function(index) inner_tables_list[[standings_tbl1()$player_id[index]]]))
 
   output$standings_tbl = renderReactable(t1())
 
@@ -127,30 +85,30 @@ server = function(input, output, session) {
 
   output$graph = renderGirafe(gg())
 
-  output$players = renderUI({
-    if (length(input$players) == 0) return()
-    accordions = map(input$players, function(player) {
-      #df = make_inner_tbl1(players %>% filter(name == player))
-      df = players %>%
-        filter(name == player) %>%
-        inner_join(preds) %>%
-        inner_join(games) %>%
-        left_join(scores) %>%
-        left_join(points) %>%
-        filter(game_id <= last_game)
-
-      vbs = list(
-        #value_box(title = "Rank", tail(df$rank, 1), theme='purple'),
-        value_box(title = "Rank", 1L, theme='purple', full_screen = TRUE, fill = TRUE, height = NULL),
-        value_box(title = "Rank", 1L, theme='teal', full_screen = TRUE, fill = TRUE, height = NULL)
-        #b2 = value_box(title = "Average Rank", mean(df$rank))
-      )
-
-      accordion_panel(title = player, layout_columns(!!!vbs))
-    })
-
-    accordion(accordions)
-  })
+  # output$players = renderUI({
+  #   if (length(input$players) == 0) return()
+  #   accordions = map(input$players, function(player) {
+  #     #df = make_inner_tbl1(players %>% filter(name == player))
+  #     df = players %>%
+  #       filter(name == player) %>%
+  #       inner_join(preds) %>%
+  #       inner_join(games) %>%
+  #       left_join(scores) %>%
+  #       left_join(points) %>%
+  #       filter(game_id <= last_game)
+  #
+  #     vbs = list(
+  #       #value_box(title = "Rank", tail(df$rank, 1), theme='purple'),
+  #       value_box(title = "Rank", 1L, theme='purple', full_screen = TRUE, fill = TRUE, height = NULL),
+  #       value_box(title = "Rank", 1L, theme='teal', full_screen = TRUE, fill = TRUE, height = NULL)
+  #       #b2 = value_box(title = "Average Rank", mean(df$rank))
+  #     )
+  #
+  #     accordion_panel(title = player, layout_columns(!!!vbs))
+  #   })
+  #
+  #   accordion(accordions)
+  # })
 
 
 

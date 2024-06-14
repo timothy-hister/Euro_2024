@@ -14,12 +14,13 @@ print_flag = function(value) {
   if (!value %in% countries$country) return(div(value))
 
   code = filter(countries, country == value) %>% pull(code) %>% tolower()
-  flag_url = "https://cdn.jsdelivr.net/gh/lipis/flag-icon-css@master/flags/4x3/" %,% code %,% ".svg"
+  if (!fs::file_exists("www/" %,% code %,% ".svg")) {
+    flag_url = "https://cdn.jsdelivr.net/gh/lipis/flag-icon-css@master/flags/4x3/" %,% code %,% ".svg"
+    download.file(flag_url, destfile = "www/" %,% code %,% ".svg")
+  }
   #image = img(src = knitr::image_uri(flag_url), height = "24px", alt = flag)
-  image = img(src = flag_url, height = "24px", alt=value)
-  #d = div(image, style = "margin: 0px 10px;")
-  d = div(image)
-  return(d)
+  image = img(src = code %,% ".svg", height = "24px", alt=value)
+  div(image)
 }
 
 calc_points = function(round, score_1, score_2, prediction_1, prediction_2, points_available) {
@@ -33,8 +34,8 @@ calc_points = function(round, score_1, score_2, prediction_1, prediction_2, poin
   )
 }
 
-make_inner_tbl1 = function(tbl) {
-  player_table = tbl %>%
+make_inner_tbl1 = function(id) {
+  player_table = filter(players, player_id == id) %>%
     inner_join(preds) %>%
     inner_join(games) %>%
     left_join(scores) %>%
@@ -115,3 +116,30 @@ gemini <- function(prompt) {
 
   return(outputs)
 }
+
+t1_cols = function(tbl) list(
+  player_id = colDef(show = F),
+  last_rank = colDef(show = F),
+  rank = colDef(
+    header = "",
+    width = 50,
+    cell = function(value, index) {
+      arrow = tbl$rank_change[index]
+      image = if (arrow == 0) icon("arrow-right") else if (arrow > 0) icon("arrow-up") else icon("arrow-down")
+      color = if_else(arrow > 0, "#008000", if_else(arrow == 0, "orange", "#e00000"))
+      div(
+        div(value, style = list(float = "left", fontWeight = 600)),
+        div(image, style = list(fontWeight = 600, color=color))
+      )
+    }
+  ),
+  rank_change = colDef(show = F),
+  total_points = colDef(header = "total points", style = function(value) {
+    if (length(unique(tbl$total_points)) == 1) return(list(fontWeight = 600))
+    normalized = (value - min(tbl$total_points)) / (max(tbl$total_points) - min(tbl$total_points))
+    color = PuOr_pal(normalized)
+    list(background = color, fontWeight = 600, color = 'white')
+    }
+  ),
+  max_points = colDef(header = "maximum possible points")
+)
