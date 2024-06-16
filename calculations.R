@@ -2,6 +2,8 @@ players = readxl::read_excel(here::here() %,% "/inputs/players.xlsx") %>%
   mutate(player_id = as.integer(player_id))
 stopifnot(sum(is.na(players)) == 0)
 
+if (is.integer(params$sample_players)) players = filter(players, player_id %in% sample(players$player_id, 2)) %>% mutate(player_id = row_number())
+
 countries = read.csv2(here::here() %,% "/inputs/country.csv", header = T, sep = ",", ) %>%
   as_tibble() %>%
   select(1, 2) %>%
@@ -12,8 +14,6 @@ countries = read.csv2(here::here() %,% "/inputs/country.csv", header = T, sep = 
     tibble_row(country = "England", code = "gb-eng"),
     tibble_row(country = "Türkiye", code = "TR")
   )
-
-
 
 if (params$import_games) {
   games_round_1 = readr::read_csv(params$scores_round_1_url, skip = 5) %>%
@@ -45,8 +45,6 @@ if (params$import_games) {
 
   stopifnot(max(games_round_1$game_id) + 1 == min(games_round_2$game_id))
   rm(games_round_1, games_round_2)
-
-  saveRDS(games, here::here() %,% "/results/games.Rds")
 } else games = readRDS(here::here() %,% "/results/games.Rds")
 
 all_teams = c(games$team_1, games$team_2) %>% unique() %>% sort()
@@ -85,40 +83,49 @@ round_2_preds = games %>%
 preds = bind_rows(round_1_preds, round_2_preds) %>%
   arrange(player_id, round, game_id)
 
-stopifnot(preds |> count(player_id) |> pull(n) |> unique() == nrow(games))
+#stopifnot(preds |> count(player_id) |> pull(n) |> unique() == nrow(games))
 rm(round_1_preds, round_2_preds)
 
-round_1_scores = readr::read_csv(params$scores_round_1_url, skip = 5) %>%
-  select(5, 6) %>%
-  set_names(c("score_1", "score_2")) %>%
-  mutate(across(everything(), as.integer)) %>%
-  mutate(game_id = row_number(), .before=1) %>%
-  na.omit() %>%
-  inner_join(games) %>%
-  mutate(result = case_when(score_1 > score_2 ~ team_1, score_1 == score_2 ~ "tie", T ~ team_2)) %>%
-  select(round, game_id, team_1, team_2, score_1, score_2, result)
+# round_1_scores = readr::read_csv(params$scores_round_1_url, skip = 5) %>%
+#   select(5, 6) %>%
+#   set_names(c("score_1", "score_2")) %>%
+#   mutate(across(everything(), as.integer)) %>%
+#   mutate(game_id = row_number(), .before=1) %>%
+#   na.omit() %>%
+#   inner_join(games) %>%
+#   mutate(result = case_when(score_1 > score_2 ~ team_1, score_1 == score_2 ~ "tie", T ~ team_2)) %>%
+#   select(round, game_id, team_1, team_2, score_1, score_2, result)
 
   #saveRDS(round_1_scores, here::here() %,% "/results/round_1_scores.Rds")
 
   # round_2_scores = if (fs::file_exists(here::here() %,% "/inputs/scores/round_2_scores.xlsx")) readxl::read_xlsx(here::here() %,% "/inputs/scores/round_2_scores.xlsx") else NULL
-  round_2_scores = NULL # for now
+#  round_2_scores = NULL # for now
 # } else {
 #   round_1_scores = readRDS(here::here() %,% "/results/round_1_scores.Rds")
 #   round_2_scores = NULL
 # }
 
-scores = if (is.null(round_2_scores)) round_1_scores else ~bind_rows(round_1_scores, round_2_scores)
-rm(round_1_scores, round_2_scores)
+# scores = if (is.null(round_2_scores)) round_1_scores else ~bind_rows(round_1_scores, round_2_scores)
+# rm(round_1_scores, round_2_scores)
+
+scores = readRDS(here::here() %,% "/results/scores.Rds")
+played_games_wo_scores = games %>% filter(!is_played) %>% filter(date <= today())
+if (nrow(played_games_wo_scores) > 0) {
+  new_scores = get_new_scores()
+  if (nrow(new_scores) > 0) {
+    scores = bind_rows(scores, new_scores)
+    saveRDS(scores, here::here() %,% "/results/scores.Rds")
+  }
+}
 
 last_game = if (nrow(scores) > 0) max(scores$game_id) else 0L
 games = games %>% mutate(is_played = game_id <= last_game)
+saveRDS(games, here::here() %,% "/results/games.Rds")
 last_round = if (nrow(scores) > 0) games %>% filter(is_played) %>% tail(1) %>% pull(round) else 0L
 
 last_games_of_day = c(0, games %>% group_by(date) %>% slice_tail(n=1) %>% pull(game_id))
 last_games_of_day = games %>% rowwise() %>% mutate(prev_game_id = as.integer(max(last_games_of_day[last_games_of_day < game_id]))) %>% ungroup() %>% select(game_id, prev_game_id)
 
-
-# we can make these reactive????
 if (last_round %in% 0:1) points = games %>%
   inner_join(scores) %>%
   inner_join(preds) %>%

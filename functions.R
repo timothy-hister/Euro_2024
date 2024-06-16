@@ -143,3 +143,65 @@ t1_cols = function(tbl) list(
   ),
   max_points = colDef(header = "maximum possible points")
 )
+
+
+
+
+
+
+
+pacman::p_load(tidyverse, rvest)
+
+append(
+  read_html("https://www.bbc.com/sport/football/european-championship/scores-fixtures/2024-06?filter=results") %>%
+    html_elements("span") %>%
+    html_text2(),
+
+  read_html("https://www.bbc.com/sport/football/european-championship/scores-fixtures/2024-06") %>%
+    html_elements("span") %>%
+    html_text2()
+) %>%
+  keep(~str_ends(., "(?i)at full time")) %>%
+  str_remove(",") %>%
+  str_squish() %>%
+  map(function(s) {
+    teams = str_split(s, "\\d")[[1]]
+    scores = str_extract_all(s, "\\d")[[1]] %>% as.integer()
+    tibble(team_1 = teams[1], team_2 = teams[2], score_1 = scores[1], score_2 = scores[2])
+  }) %>%
+  bind_rows() %>%
+  mutate(across(1:2, str_squish))
+
+
+scrape_site = function(url) {
+  read_html(url) %>%
+    html_elements("span") %>%
+    html_text2() %>%
+    keep(~str_ends(., "(?i)at full time")) %>%
+    str_remove(",") %>%
+    str_squish() %>%
+    map(function(s) {
+      teams = str_split(s, "\\d")[[1]]
+      scores = str_extract_all(s, "\\d")[[1]] %>% as.integer()
+      tibble(team_1 = teams[1], team_2 = teams[2], score_1 = scores[1], score_2 = scores[2])
+    }) %>%
+    bind_rows() %>%
+    mutate(across(1:2, str_squish)) %>%
+    mutate(across(1:2, ~case_match(., "Turkey" ~ "Türkiye", "Czech Republic" ~ "Czechia", .default = .))) %>%
+    mutate(result = case_when(score_1 > score_2 ~ team_1, score_1 == score_2 ~ "tie", T ~ team_2))
+}
+
+get_new_scores = function() {
+  new_scores = scrape_site("https://www.bbc.com/sport/football/european-championship/scores-fixtures/2024-06")
+  old_scores = scrape_site("https://www.bbc.com/sport/football/european-championship/scores-fixtures/2024-06?filter=results")
+  all_scores = bind_rows(new_scores, old_scores)
+  all_scores = bind_rows(all_scores,
+    all_scores %>%
+      select(2, 1, 4, 3, 5) %>%
+      set_names(c("team_1", "team_2", "score_2", "score_1", "result"))
+  )
+  games %>%
+    filter(!is_played) %>%
+    inner_join(all_scores) %>%
+    select(round, game_id, team_1, team_2, score_1, score_2, result)
+}
