@@ -145,11 +145,15 @@ t1_cols = function(tbl) list(
 )
 
 scrape_site = function(url) {
-  read_html(url) %>%
+  li = read_html(url) %>%
     html_elements("span") %>%
     html_text2() %>%
-    #keep(~str_ends(., "(?i)at full time")) %>%
-    keep(~str_detect(., "(?i).+\\d , .+\\d.*")) %>%
+    keep(~str_ends(., "(?i)at full time"))
+    #keep(~str_detect(., "(?i).+\\d , .+\\d.*"))
+
+  if (length(li) == 0) return()
+
+  li %>%
     str_remove(",") %>%
     str_squish() %>%
     map(function(s) {
@@ -174,6 +178,6 @@ get_new_scores = function() {
   )
   games %>%
     filter(!is_played) %>%
-    inner_join(all_scores) %>%
+    left_join(all_scores) %>%
     select(round, game_id, team_1, team_2, score_1, score_2, result)
 }
