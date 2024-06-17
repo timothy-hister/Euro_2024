@@ -23,10 +23,19 @@ ui = page_sidebar(
     ),
   navset_card_underline(
     title = "",
-    #nav_panel("Welcome", uiOutput("welcome")),
     nav_panel("Standings", withSpinner(reactableOutput("standings_tbl"))),
-    nav_panel("Fun Graph", withSpinner(girafeOutput("graph")))
-    #nav_panel("Player Pages", withSpinner(uiOutput("players")), value = "p3")
+    nav_panel("Fun Graph",
+      card(
+        layout_sidebar(
+          fillable = TRUE,
+          sidebar = sidebar(
+            virtualSelectInput("graph_player", "Choose Your Player to See", choices = players$name, selected = filter(players, name == sample(players$name, 1))$name, multiple = F, width = "100%", dropboxWrapper = "body")
+          ),
+          withSpinner(girafeOutput("graph"))
+        )
+      )
+    ),
+    nav_panel("Games", withSpinner(reactableOutput("games_tbl")))
   )
 )
 

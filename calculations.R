@@ -113,7 +113,7 @@ played_games_wo_scores = games %>% filter(!is_played) %>% filter(date <= today()
 if (nrow(played_games_wo_scores) > 0) {
   new_scores = get_new_scores()
   if (nrow(new_scores) > 0) {
-    scores = bind_rows(scores, new_scores)
+    scores = bind_rows(scores, new_scores) %>% na.omit()
     saveRDS(scores, here::here() %,% "/results/scores.Rds")
   }
 }

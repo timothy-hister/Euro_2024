@@ -66,19 +66,21 @@ server = function(input, output, session) {
 
   gg1 = reactive(
     players %>%
-      inner_join(players %>% filter(name %in% input$players)) %>%
+      filter(name %in% input$players) %>%
       inner_join(points) %>%
       filter(game_id <= input$as_of_game) %>%
       #mutate(name = factor(name, ordered = T)) %>%
-      ggplot(aes(x = game_id, y = total_points, color = name)) +
-      geom_line_interactive(aes(tooltip = nickname, data_id = name)) +
+      ggplot(aes(x = game_id, y = total_points, color = name, alpha=.5)) +
+      #geom_line_interactive(aes(tooltip = nickname, data_id = name)) +
       #geom_smooth_interactive(aes(tooltip = nickname, data_id = name)) +
+      geom_line() +
       geom_point() +
       ggthemes::theme_clean() +
       labs(x = "Game #", y = "Total Points", color = NULL) +
       scale_x_continuous(breaks = scores$game_id) +
       scale_color_viridis_d(option = 'rocket') +
-      theme(legend.position = 'none')
+      theme(legend.position = 'none') +
+      geom_line(data = players %>% filter(name == input$graph_player) %>% inner_join(points) %>% filter(game_id <= input$as_of_game), linewidth=5, color='black')
   )
 
   gg = reactive(girafe(ggobj = gg1(), options = list(opts_hover(css = "stroke: black; stroke-width: 5px;"), opts_hover_inv(css = "opacity:0.1;"))))
@@ -148,9 +150,43 @@ server = function(input, output, session) {
   #
   # output$welcome = renderText(txt)
 
-
-
+output$games_tbl = renderReactable(
+  games %>%
+    left_join(scores) %>%
+    relocate(is_played, 1) %>%
+    reactable(
+      columns = list(
+        team_1 = colDef(cell = function(value) print_flag(value)),
+        team_2 = colDef(cell = function(value) print_flag(value)),
+        result = colDef(cell = function(value) print_flag(value))
+    )
+  )
+)
 
 }
 
 shinyApp(ui, server)
+
+
+# games %>%
+#   inner_join(preds) %>%
+#   inner_join(players) %>%
+#   mutate(pred_team = case_when(pred_winner == team_1 ~ "Team 1", pred_winner == team_2 ~ "Team 2", T ~ "tie")) %>%
+#   group_by(round, game_id, date, location, pred_team) %>%
+#   summarise(
+#     n_players = n_distinct(name),
+#     players = paste(name, collapse = ", ")) %>%
+#   mutate(players = str_replace(players, ",(?=[^,]+$)", " and")) %>%
+#   ungroup() %>%
+#   left_join(scores) %>%
+#   right_join(games) %>%
+#   pivot_wider(names_from = pred_team, values_from = c("n_players", "players")) %>%
+#   arrange(game_id) %>%
+#   reactable()
+#
+#
+#   ggplot(aes(x=game_id, y=n_players, fill=name)) +
+#   geom_col()
+
+
+
