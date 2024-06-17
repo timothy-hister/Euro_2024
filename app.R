@@ -1,9 +1,9 @@
 is_for_shinyapps = T
 
-params = list(import_round_1 = F, import_round_2 = F, import_games = F, scores_round_2_url = NULL)
+params = list(import_round_1 = F, import_round_2 = F, import_games = F, scores_round_2_url = NULL, scrape = T)
 params = if (is_for_shinyapps) append(params, list(authenticate = T)) else append(params, list(authenticate = F, sample_players = NULL))
 
-pacman::p_load(tidyverse, gt, ggiraph, reactable, RColorBrewer, shiny, htmltools, bslib, shinyWidgets, shinymanager, shinycssloaders, rvest)
+pacman::p_load(tidyverse, gt, ggiraph, reactable, RColorBrewer, shiny, htmltools, bslib, shinyWidgets, shinymanager, shinycssloaders, rvest, shinyjs)
 
 `%,%` = function(a,b) paste0(a,b)
 `%,,%` = function(a,b) paste(a,b)
@@ -13,6 +13,14 @@ source(here::here() %,% "/calculations.R", local = T)
 source(here::here() %,% "/ui.R", local = T)
 
 server = function(input, output, session) {
+  shinyjs::hide(id = "teams")
+  shinyjs::hide(id = "locations")
+
+  if (is_for_shinyapps) {
+    nav_remove(id = "navbar", target = "Prints")
+    nav_select(id = "navbar", selected = "Standings")
+  }
+
   if (params$authenticate) {
     res_auth <- secure_server(
       check_credentials = check_credentials(credentials)
@@ -23,8 +31,7 @@ server = function(input, output, session) {
     })
   }
 
-  observe(shinyjs::hide(id = "teams"))
-  observe(shinyjs::hide(id = "locations"))
+  observeEvent(input$navbar, if (input$navbar == "Fun Graph") show("graph_player") else hide("graph_player"))
 
   prev_game = reactive(last_games_of_day %>% filter(game_id == req(input$as_of_game)) %>% pull(prev_game_id))
 
@@ -36,9 +43,6 @@ server = function(input, output, session) {
         select(player_id, last_rank = rank) # work????
     }
   )
-
-  observe(print(last_rank()))
-  #observe(print(input$as_of_game))
 
   standings_tbl1 = reactive(
     standings %>%
@@ -58,11 +62,11 @@ server = function(input, output, session) {
         rename(name = nickname)
   )
 
-  observe(print(standings_tbl1()))
+  output$standings_tbl1 = renderTable(standings_tbl1())
 
   t1 = reactive(reactable(standings_tbl1(), columns = t1_cols(standings_tbl1()), searchable = TRUE, highlight = TRUE, onClick = 'expand', rowStyle = list(cursor = "pointer"), defaultExpanded = F, details = function(index) inner_tables_list[[standings_tbl1()$player_id[index]]]))
 
-  output$standings_tbl = renderReactable(t1())
+  output$standings = renderReactable(t1())
 
   gg1 = reactive(
     players %>%
@@ -76,10 +80,11 @@ server = function(input, output, session) {
       geom_line() +
       geom_point() +
       ggthemes::theme_clean() +
-      labs(x = "Game #", y = "Total Points", color = NULL) +
+      labs(x = "Game #", y = "Total Points", color = NULL, alpha = NULL, linewidth = NULL) +
+      guides(alpha = 'none') +
       scale_x_continuous(breaks = scores$game_id) +
       scale_color_viridis_d(option = 'rocket') +
-      theme(legend.position = 'none') +
+      theme(legend.position = ifelse(length(input$players) <= 5, 'right', 'none')) +
       geom_line(data = players %>% filter(name == input$graph_player) %>% inner_join(points) %>% filter(game_id <= input$as_of_game), linewidth=5, color='black')
   )
 
@@ -150,43 +155,44 @@ server = function(input, output, session) {
   #
   # output$welcome = renderText(txt)
 
+
+
+
 output$games_tbl = renderReactable(
   games %>%
     left_join(scores) %>%
     relocate(is_played, 1) %>%
-    reactable(
+    left_join(points) %>%
+    group_by(round, game_id) %>%
+    summarise(
+      total_points = sum(points),
+      avg_points = mean(points),
+      perc_got_points = mean(points > 0)
+    ) %>%
+    ungroup() %>%
+    right_join(games) %>%
+    left_join(scores) %>%
+    mutate(game = case_when(is.na(team_1) ~ NA_character_, T ~ team_1 %,,% "-" %,,% team_2)) %>%
+    mutate(result = case_when(!is_played ~ NA_character_, round == 1 ~ score_1 %,% " - " %,% score_2, T ~ result)) %>%
+    select(is_played, round, points_available, game_id, date, location, game,  result, total_points, avg_points, perc_got_points) %>%
+
+    reactable(,
       columns = list(
-        team_1 = colDef(cell = function(value) print_flag(value)),
-        team_2 = colDef(cell = function(value) print_flag(value)),
-        result = colDef(cell = function(value) print_flag(value))
+        is_played = colDef(show = F),
+        total_points = colDef(name = "Total # of points received"),
+        avg_points = colDef(name = "Average # of points received", format = colFormat(digits = 2)),
+        perc_got_points = colDef(name = "% of players who got >=1 points", format = colFormat(percent = T, digits = 0)),
+        game = colDef(na = "", cell = function(value) {
+          div(style = "display: flex; align-items: center;",
+              print_flag(word(value, 1)),
+              if (!is.na(value)) div("V", style = "fontWeight: 600; margin: 0 10px;"),
+              print_flag(word(value, 3))
+          )
+        }, minWidth = 150)
+      ),
+      rowStyle = function(index) if (!games$is_played[index]) list(background = "rgba(0, 0, 0, 0.05)")
     )
   )
-)
-
 }
 
 shinyApp(ui, server)
-
-
-# games %>%
-#   inner_join(preds) %>%
-#   inner_join(players) %>%
-#   mutate(pred_team = case_when(pred_winner == team_1 ~ "Team 1", pred_winner == team_2 ~ "Team 2", T ~ "tie")) %>%
-#   group_by(round, game_id, date, location, pred_team) %>%
-#   summarise(
-#     n_players = n_distinct(name),
-#     players = paste(name, collapse = ", ")) %>%
-#   mutate(players = str_replace(players, ",(?=[^,]+$)", " and")) %>%
-#   ungroup() %>%
-#   left_join(scores) %>%
-#   right_join(games) %>%
-#   pivot_wider(names_from = pred_team, values_from = c("n_players", "players")) %>%
-#   arrange(game_id) %>%
-#   reactable()
-#
-#
-#   ggplot(aes(x=game_id, y=n_players, fill=name)) +
-#   geom_col()
-
-
-

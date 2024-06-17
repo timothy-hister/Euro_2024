@@ -109,15 +109,16 @@ rm(round_1_preds, round_2_preds)
 # rm(round_1_scores, round_2_scores)
 
 scores = readRDS(here::here() %,% "/results/scores.Rds")
-played_games_wo_scores = games %>% filter(!is_played) %>% filter(date <= today())
-if (nrow(played_games_wo_scores) > 0) {
-  new_scores = get_new_scores()
-  if (nrow(new_scores) > 0) {
-    scores = bind_rows(scores, new_scores) %>% na.omit()
-    saveRDS(scores, here::here() %,% "/results/scores.Rds")
+if (params$scrape) {
+  played_games_wo_scores = games %>% filter(!is_played) %>% filter(date <= today())
+  if (nrow(played_games_wo_scores) > 0) {
+    new_scores = get_new_scores()
+    if (nrow(new_scores) > 0) {
+      scores = bind_rows(scores, new_scores) %>% na.omit()
+      saveRDS(scores, here::here() %,% "/results/scores.Rds")
+    }
   }
 }
-
 last_game = if (nrow(scores) > 0) max(scores$game_id) else 0L
 games = games %>% mutate(is_played = game_id <= last_game)
 saveRDS(games, here::here() %,% "/results/games.Rds")

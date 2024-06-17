@@ -17,24 +17,17 @@ ui = page_sidebar(
     img(src='logo.jpg'),
     virtualSelectInput("players", "Choose Your Players", choices = players$name, selected = players$name, multiple = T, width = "100%", dropboxWrapper = "body"),
     sliderTextInput("as_of_game", "Choose The Game Number", choices = 0:last_game, selected = last_game),
+    virtualSelectInput("graph_player", "Choose Your Player to See", choices = players$name, selected = filter(players, name == sample(players$name, 1))$name, multiple = F, width = "100%", dropboxWrapper = "body"),
     #p("For the supremely dorky of you..."),
     pickerInput("teams", "Choose Your Teams", choices = all_teams, selected = all_teams, multiple = T, options = pickerOptions(container = "body"), width = "100%"),
     pickerInput("locations", "Choose Your Locations", choices = all_locations, selected = all_locations, multiple = T, options = pickerOptions(container = "body"), width = "100%")
     ),
   navset_card_underline(
+    id = "navbar",
     title = "",
-    nav_panel("Standings", withSpinner(reactableOutput("standings_tbl"))),
-    nav_panel("Fun Graph",
-      card(
-        layout_sidebar(
-          fillable = TRUE,
-          sidebar = sidebar(
-            virtualSelectInput("graph_player", "Choose Your Player to See", choices = players$name, selected = filter(players, name == sample(players$name, 1))$name, multiple = F, width = "100%", dropboxWrapper = "body")
-          ),
-          withSpinner(girafeOutput("graph"))
-        )
-      )
-    ),
+    nav_panel("Prints", id = "Prints", textOutput("res_auth"), h5("Standings Table"), tableOutput("standings_tbl1")),
+    nav_panel("Standings", withSpinner(reactableOutput("standings"))),
+    nav_panel("Fun Graph", withSpinner(girafeOutput("graph"))),
     nav_panel("Games", withSpinner(reactableOutput("games_tbl")))
   )
 )

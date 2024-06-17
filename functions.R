@@ -179,5 +179,6 @@ get_new_scores = function() {
   games %>%
     filter(!is_played) %>%
     left_join(all_scores) %>%
+    na.omit() %>%
     select(round, game_id, team_1, team_2, score_1, score_2, result)
 }
