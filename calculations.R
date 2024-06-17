@@ -108,9 +108,6 @@ rm(round_1_preds, round_2_preds)
 # scores = if (is.null(round_2_scores)) round_1_scores else ~bind_rows(round_1_scores, round_2_scores)
 # rm(round_1_scores, round_2_scores)
 
-#scores = readRDS(here::here() %,% "/results/scores.Rds")
-
-
 scores = read.csv2("https://raw.githubusercontent.com/timothy-hister/Euro_2024/main/results/scores.csv") %>% as_tibble()
 
 
@@ -121,10 +118,10 @@ if (params$scrape) {
     if (nrow(new_scores) > 0) {
       scores = bind_rows(scores, new_scores) %>% na.omit()
       write_csv2(scores, "results/scores.csv")
-      repo = git2r::clone("https://github.com/timothy-hister/Euro_2024.git")
-      git2r::add(repo, "results/scores.csv")
-      git2r::commit(repo, "Updating scores")
-      system("git push")
+      # repo = git2r::clone("https://github.com/timothy-hister/Euro_2024.git")
+      # git2r::add(repo, "results/scores.csv")
+      # git2r::commit(repo, "Updating scores")
+      # system("git push")
     }
   }
 }
