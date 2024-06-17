@@ -3,7 +3,7 @@ is_for_shinyapps = F
 params = list(import_round_1 = F, import_round_2 = F, import_games = F, scores_round_2_url = NULL)
 params = if (is_for_shinyapps) append(params, list(scores_round_1_url = "https://raw.githubusercontent.com/timothy-hister/Euro_2024/main/scores/round_1_scores.csv", authenticate = T)) else append(params, list(scores_round_1_url = "scores/round_1_scores.csv", authenticate = F, sample_players = NULL))
 
-pacman::p_load(tidyverse, gt, ggiraph, reactable, RColorBrewer, shiny, htmltools, bslib, shinyWidgets, shinymanager, shinycssloaders)
+pacman::p_load(tidyverse, gt, ggiraph, reactable, RColorBrewer, shiny, htmltools, bslib, shinyWidgets, shinymanager, shinycssloaders, rvest)
 
 `%,%` = function(a,b) paste0(a,b)
 `%,,%` = function(a,b) paste(a,b)
