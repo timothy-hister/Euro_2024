@@ -71,6 +71,8 @@ rm(round_1_preds, round_2_preds)
 scores = read.csv2("https://raw.githubusercontent.com/timothy-hister/Euro_2024/main/results/scores.csv") %>% as_tibble() %>% unique()
 last_game = if (nrow(scores) > 0) max(scores$game_id) else 0L
 games = games %>% mutate(is_played = game_id <= last_game)
+last_round = if (nrow(scores) > 0) games %>% filter(is_played) %>% tail(1) %>% pull(round) else 0L
+
 
 if (params$scrape) {
   played_games_wo_scores = games %>% filter(!is_played) %>% filter(date <= today())
