@@ -110,7 +110,6 @@ rm(round_1_preds, round_2_preds)
 
 scores = read.csv2("https://raw.githubusercontent.com/timothy-hister/Euro_2024/main/results/scores.csv") %>% as_tibble()
 
-
 if (params$scrape) {
   played_games_wo_scores = games %>% filter(!is_played) %>% filter(date <= today())
   if (nrow(played_games_wo_scores) > 0) {
@@ -118,10 +117,13 @@ if (params$scrape) {
     if (nrow(new_scores) > 0) {
       scores = bind_rows(scores, new_scores) %>% na.omit()
       write_csv2(scores, "results/scores.csv")
-      # repo = git2r::clone("https://github.com/timothy-hister/Euro_2024.git")
-      # git2r::add(repo, "results/scores.csv")
-      # git2r::commit(repo, "Updating scores")
-      # system("git push")
+      tryCatch({
+        #repo = git2r::clone("https://github.com/timothy-hister/Euro_2024.git")
+        repo = repository()
+        git2r::add(repo, "results/scores.csv")
+        git2r::commit(repo, "Updating scores")
+        system("git push")
+      }, error=function(e) message(e))
     }
   }
 }
@@ -129,6 +131,7 @@ last_game = if (nrow(scores) > 0) max(scores$game_id) else 0L
 games = games %>% mutate(is_played = game_id <= last_game)
 saveRDS(games, here::here() %,% "/results/games.Rds")
 last_round = if (nrow(scores) > 0) games %>% filter(is_played) %>% tail(1) %>% pull(round) else 0L
+
 
 last_games_of_day = c(0, games %>% group_by(date) %>% slice_tail(n=1) %>% pull(game_id))
 last_games_of_day = games %>% rowwise() %>% mutate(prev_game_id = as.integer(max(last_games_of_day[last_games_of_day < game_id]))) %>% ungroup() %>% select(game_id, prev_game_id)

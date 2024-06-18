@@ -26,6 +26,7 @@ ui = page_sidebar(
     id = "navbar",
     title = "",
     nav_panel("Prints", id = "Prints", textOutput("res_auth"), h5("Standings Table"), tableOutput("standings_tbl1")),
+    nav_panel("Welcome!", fluidRow(column(width = 12, uiOutput("welcome")))),
     nav_panel("Standings", withSpinner(reactableOutput("standings"))),
     nav_panel("Fun Graph", withSpinner(girafeOutput("graph"))),
     nav_panel("Games", withSpinner(reactableOutput("games_tbl")))
