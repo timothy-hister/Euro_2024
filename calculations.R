@@ -1,8 +1,12 @@
+## PLAYERS
+
 players = readxl::read_excel(here::here() %,% "/inputs/players.xlsx") %>%
   mutate(player_id = as.integer(player_id))
 stopifnot(sum(is.na(players)) == 0)
 
 if (is.integer(params$sample_players)) players = filter(players, player_id %in% sample(players$player_id, 2)) %>% mutate(player_id = row_number())
+
+## COUNTRIES
 
 countries = read.csv2(here::here() %,% "/inputs/country.csv", header = T, sep = ",", ) %>%
   as_tibble() %>%
@@ -15,8 +19,14 @@ countries = read.csv2(here::here() %,% "/inputs/country.csv", header = T, sep = 
     tibble_row(country = "Türkiye", code = "TR")
   )
 
+## GAMES
+
+games = read.csv2(here::here() %,% "/inputs/games.csv") %>% as_tibble() %>% unique()
+
 all_teams = c(games$team_1, games$team_2) %>% unique() %>% sort()
 all_locations = sort(unique(games$location))
+
+## PREDICTIONS
 
 if (params$import_round_1) {
   round_1_preds = map(fs::dir_info(here::here() %,% "/inputs/Round_1")$path, function(wb) {
@@ -54,8 +64,13 @@ preds = bind_rows(round_1_preds, round_2_preds) %>%
 #stopifnot(preds |> count(player_id) |> pull(n) |> unique() == nrow(games))
 rm(round_1_preds, round_2_preds)
 
+
+
+## SCORES
+
 scores = read.csv2("https://raw.githubusercontent.com/timothy-hister/Euro_2024/main/results/scores.csv") %>% as_tibble() %>% unique()
-games = read.csv2("inputs/games") %>% as_tibble() %>% unique()
+last_game = if (nrow(scores) > 0) max(scores$game_id) else 0L
+games = games %>% mutate(is_played = game_id <= last_game)
 
 if (params$scrape) {
   played_games_wo_scores = games %>% filter(!is_played) %>% filter(date <= today())
@@ -74,10 +89,10 @@ if (params$scrape) {
     }
   }
 }
+
 last_game = if (nrow(scores) > 0) max(scores$game_id) else 0L
 games = games %>% mutate(is_played = game_id <= last_game)
 last_round = if (nrow(scores) > 0) games %>% filter(is_played) %>% tail(1) %>% pull(round) else 0L
-
 
 last_games_of_day = c(0, games %>% group_by(date) %>% slice_tail(n=1) %>% pull(game_id))
 last_games_of_day = games %>% rowwise() %>% mutate(prev_game_id = as.integer(max(last_games_of_day[last_games_of_day < game_id]))) %>% ungroup() %>% select(game_id, prev_game_id)
