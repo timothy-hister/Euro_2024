@@ -15,38 +15,6 @@ countries = read.csv2(here::here() %,% "/inputs/country.csv", header = T, sep = 
     tibble_row(country = "Türkiye", code = "TR")
   )
 
-if (params$import_games) {
-  games_round_1 = readr::read_csv(params$scores_round_1_url, skip = 5) %>%
-    select(1, 2, 3, 4, 7) %>%
-    na.omit() %>%
-    set_names(c("game_id", "date", "location", "team_1", "team_2")) %>%
-    mutate(game_id = as.integer(game_id)) %>%
-    mutate(date = ymd("2024-06" %,% word(date, 2)))
-
-  if (is.null(params$scores_round_2_url)) games_round_2 = tibble(game_id = 37:51)
-
-  # games_round_2 = readxl::read_xlsx(here::here() %,% "/inputs/scores/round_2_scores.xlsx") %>% as.matrix() %>% unname()
-  # games_round_2 = map(37:52, function(i) {
-  #   w = which(games_round_2 == i, arr.ind = T)
-  #   if (length(w) == 0) return()
-  #   m = games_round_2[w[1]:(w[1]+4), w[2]:(w[2]+1)]
-  #   #tibble(game_id = m[1,1], date = m[1,2], team_1 = m[2,1], team_2 = m[3,1], pred1 = m[2,2], pred2 = m[3,2], location = m[4,1])
-  #   tibble(game_id = m[1,1], date = m[1,2], team_1 = ifelse(m[2,1] == 0, NA, m[2,1]), team_2 = ifelse(m[3,1] == 0, NA, m[3,1]), location = m[4,1])
-  # }) %>%
-  #   bind_rows() %>%
-  #   mutate(game_id = as.integer(game_id)) %>%
-  #   mutate(date = ymd("2024-" %,% word(date, 2) %,% "-" %,% word(date,3)))
-
-  games = bind_rows(games_round_1, games_round_2)
-  games$round = c(rep(1L, 36L), rep(2L, 8L), rep(3L, 4L), rep(4L, 2L), 5L)
-  games$points_available = map_int(games$round, ~switch(., 3L, 4L, 6L, 8L, 10L))
-  games = select(games, round, game_id, points_available, date, location, team_1, team_2) %>%
-    arrange(round, game_id)
-
-  stopifnot(max(games_round_1$game_id) + 1 == min(games_round_2$game_id))
-  rm(games_round_1, games_round_2)
-} else games = readRDS(here::here() %,% "/results/games.Rds")
-
 all_teams = c(games$team_1, games$team_2) %>% unique() %>% sort()
 all_locations = sort(unique(games$location))
 
@@ -86,29 +54,8 @@ preds = bind_rows(round_1_preds, round_2_preds) %>%
 #stopifnot(preds |> count(player_id) |> pull(n) |> unique() == nrow(games))
 rm(round_1_preds, round_2_preds)
 
-# round_1_scores = readr::read_csv(params$scores_round_1_url, skip = 5) %>%
-#   select(5, 6) %>%
-#   set_names(c("score_1", "score_2")) %>%
-#   mutate(across(everything(), as.integer)) %>%
-#   mutate(game_id = row_number(), .before=1) %>%
-#   na.omit() %>%
-#   inner_join(games) %>%
-#   mutate(result = case_when(score_1 > score_2 ~ team_1, score_1 == score_2 ~ "tie", T ~ team_2)) %>%
-#   select(round, game_id, team_1, team_2, score_1, score_2, result)
-
-  #saveRDS(round_1_scores, here::here() %,% "/results/round_1_scores.Rds")
-
-  # round_2_scores = if (fs::file_exists(here::here() %,% "/inputs/scores/round_2_scores.xlsx")) readxl::read_xlsx(here::here() %,% "/inputs/scores/round_2_scores.xlsx") else NULL
-#  round_2_scores = NULL # for now
-# } else {
-#   round_1_scores = readRDS(here::here() %,% "/results/round_1_scores.Rds")
-#   round_2_scores = NULL
-# }
-
-# scores = if (is.null(round_2_scores)) round_1_scores else ~bind_rows(round_1_scores, round_2_scores)
-# rm(round_1_scores, round_2_scores)
-
-scores = read.csv2("https://raw.githubusercontent.com/timothy-hister/Euro_2024/main/results/scores.csv") %>% as_tibble()
+scores = read.csv2("https://raw.githubusercontent.com/timothy-hister/Euro_2024/main/results/scores.csv") %>% as_tibble() %>% unique()
+games = read.csv2("inputs/games") %>% as_tibble() %>% unique()
 
 if (params$scrape) {
   played_games_wo_scores = games %>% filter(!is_played) %>% filter(date <= today())
@@ -119,7 +66,7 @@ if (params$scrape) {
       write_csv2(scores, "results/scores.csv")
       tryCatch({
         #repo = git2r::clone("https://github.com/timothy-hister/Euro_2024.git")
-        repo = repository()
+        repo = git2r::repository()
         git2r::add(repo, "results/scores.csv")
         git2r::commit(repo, "Updating scores")
         system("git push")
@@ -129,7 +76,6 @@ if (params$scrape) {
 }
 last_game = if (nrow(scores) > 0) max(scores$game_id) else 0L
 games = games %>% mutate(is_played = game_id <= last_game)
-saveRDS(games, here::here() %,% "/results/games.Rds")
 last_round = if (nrow(scores) > 0) games %>% filter(is_played) %>% tail(1) %>% pull(round) else 0L
 
 

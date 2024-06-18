@@ -1,4 +1,4 @@
-is_for_shinyapps = F
+is_for_shinyapps = T
 
 params = list(import_round_1 = F, import_round_2 = F, import_games = F, scores_round_2_url = NULL, scrape = T)
 params = if (is_for_shinyapps) append(params, list(authenticate = T)) else append(params, list(authenticate = F, sample_players = NULL))
