@@ -1,9 +1,6 @@
 PuOr_pal <- function(x) {
-  # Define the PuOr color palette with two colors
   palette <- brewer.pal(11, "PuOr")
-  # Generate the color ramp between the two PuOr colors
   ramp <- colorRamp(palette, space = "rgb")
-  # Generate the colors based on the input values using the PuOr color ramp
   colors <- ramp(x)
   return(rgb(colors, maxColorValue = 255))
 }
@@ -85,36 +82,6 @@ make_tbl2 = function(index) {
     geom_point(data = filter(points, player_id == standings_tbl$player_id[index]), size = 3) +
     theme(legend.position = 'bottom') +
     ggtitle("How You Compare With Your Colleagues")
-}
-
-
-gemini <- function(prompt) {
-  library(httr)
-
-  model_query <- "gemini-pro:generateContent"
-
-  response <- httr::POST(
-    url = paste0("https://generativelanguage.googleapis.com/v1beta/models/", model_query),
-    query = list(key = Sys.getenv("GEMINI_API_KEY")),
-    content_type_json(),
-    encode = "json",
-    body = list(
-      contents = list(
-        parts = list(
-          list(text = prompt)
-        )
-      ),
-      generationConfig = list(
-        temperature = 0.5,
-        maxOutputTokens = 1024
-      )
-    )
-  )
-
-  candidates <- content(response)$candidates
-  outputs <- unlist(lapply(candidates, function(candidate) candidate$content$parts))
-
-  return(outputs)
 }
 
 t1_cols = function(tbl) list(
