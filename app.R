@@ -1,7 +1,5 @@
-is_for_shinyapps = T
-
-params = list(import_round_1 = F, import_round_2 = F, import_games = F, scrape = T)
-params = if (is_for_shinyapps) append(params, list(authenticate = T)) else append(params, list(authenticate = F))
+is_local = Sys.getenv('SHINY_PORT') == ""
+params = list(import_round_1 = F, import_round_2 = F, import_games = F, scrape = T, authenticate = !is_local)
 
 pacman::p_load(tidyverse, gt, ggiraph, reactable, RColorBrewer, shiny, htmltools, bslib, shinyWidgets, shinymanager, shinycssloaders, rvest, shinyjs)
 
@@ -16,7 +14,7 @@ server = function(input, output, session) {
   shinyjs::hide(id = "teams")
   shinyjs::hide(id = "locations")
 
-  if (is_for_shinyapps) {
+  if (!is_local) {
     nav_remove(id = "navbar", target = "Prints")
   }
 
@@ -202,8 +200,8 @@ output$welcome = renderUI({
 
   vbs = list(
     value_box(title = "Number of Games Played", value = nrow(filter(games, is_played)), theme = "bg-gradient-purple-pink"),
-    value_box(title = "Current Leader(s)", value = standings %>% filter(game_id == last_game) %>% filter(rank == 1) %>% inner_join(players) %>% pull(name) %>% paste(collapse=", "), theme = "bg-gradient-green-teal"),
-    value_box(title = "Current 'Most Room For Improvement(s)'", value = standings %>% filter(game_id == last_game) %>% filter(rank == standings %>% filter(game_id == last_game) %>% pull(rank) %>% max()) %>% inner_join(players) %>% pull(name) %>% paste(collapse=", "), theme = "bg-gradient-purple-red"),
+    value_box(title = "Current Leader(s)", value = standings %>% filter(game_id == last_game) %>% filter(rank == 1) %>% inner_join(players) %>% pull(name) %>% paste(collapse=", "), p("With an impressive" %,,% (standings %>% filter(game_id == last_game) %>% filter(rank == 1) %>% inner_join(players) %>% pull(total_points)) %,,% "points"), theme = "bg-gradient-green-teal"),
+    value_box(title = "Current 'Most Room For Improvement(s)'", value = standings %>% filter(game_id == last_game) %>% filter(rank == standings %>% filter(game_id == last_game) %>% pull(rank) %>% max()) %>% inner_join(players) %>% pull(name) %>% paste(collapse=", "), p("With a great-work-but-you-can-do-better!" %,,% (standings %>% filter(game_id == last_game) %>% filter(rank == standings %>% filter(game_id == last_game) %>% pull(rank) %>% max()) %>% inner_join(players) %>% pull(total_points)) %,,% "points"), theme = "bg-gradient-purple-red"),
     value_box(title = "Average # of Points Received Per Game", value = round(mean(points$points), 2), theme = "bg-gradient-cyan-purple"),
     value_box(title = "Most Lucrative Game So Far", value = lucrative_game$team_1 %,,% "versus" %,,% lucrative_game$team_2, p(lucrative_game$points %,,% "points received"), theme = "bg-gradient-blue-orange"),
     value_box(title = "Most Lucrative Team(s)", value = lucrative_team %>% filter(points == max(lucrative_team$points)) %>% pull(team) %>% paste(collapse = ", "), p(max(lucrative_team$points) %,,% "points received"), theme = "bg-gradient-orange-pink")
