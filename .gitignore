@@ -7,3 +7,4 @@ inputs
 attic
 knits
 *.Rds
+rsconnect
