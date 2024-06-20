@@ -5,7 +5,7 @@ account: djschoo
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 12173516
-bundleId: 8764308
+bundleId: 8768429
 url: https://djschoo.shinyapps.io/Euro_2024/
 version: 1
 asMultiple: FALSE

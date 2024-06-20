@@ -11,6 +11,16 @@ credentials <- data.frame(
 
 ui = page_sidebar(
   shinyjs::useShinyjs(),
+  tags$script(
+    "
+    // Custom JavaScript function to navigate to the second page
+    function goToSecondPage(tableId) {
+      setTimeout(function() {
+        $('#' + tableId + ' .rt-tbody .-page-2').click();
+      }, 500); // Adjust the timeout as needed
+    }
+    "
+  ),
   theme = bs_theme(bootswatch = "minty"),
   title = "Euro 2024",
   sidebar = list(
@@ -25,7 +35,7 @@ ui = page_sidebar(
   navset_card_underline(
     id = "navbar",
     title = "",
-    nav_panel("Prints", id = "Prints", textOutput("res_auth"), h5("Standings Table"), tableOutput("standings_tbl1")),
+    #nav_panel("Prints", id = "Prints", textOutput("res_auth"), h5("Standings Table"), tableOutput("standings_tbl1")),
     nav_panel("Welcome!", fluidRow(column(width = 12, uiOutput("welcome")))),
     nav_panel("Standings", withSpinner(reactableOutput("standings"))),
     nav_panel("Fun Graph", withSpinner(girafeOutput("graph"))),
