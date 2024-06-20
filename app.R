@@ -44,6 +44,7 @@ server = function(input, output, session) {
   ## STANDINGS
 
   standings_tbl1 = reactive(
+    suppressMessages(
     standings %>%
         inner_join(players) %>%
         filter(name %in% input$players) %>%
@@ -59,7 +60,7 @@ server = function(input, output, session) {
         mutate(rank_change = last_rank - rank) %>%
         select(player_id, rank, rank_change, nickname, total_points, last_rank, max_points) %>%
         rename(name = nickname)
-  )
+  ))
 
   #output$standings_tbl1 = renderTable(standings_tbl1())
 
@@ -71,6 +72,7 @@ server = function(input, output, session) {
   ## FUN GRAPH
 
   gg1 = reactive(
+    suppressMessages(
     players %>%
       filter(name %in% input$players) %>%
       inner_join(points) %>%
@@ -88,7 +90,7 @@ server = function(input, output, session) {
       scale_color_viridis_d(option = 'rocket') +
       theme(legend.position = ifelse(length(input$players) <= 5, 'right', 'none')) +
       geom_line(data = players %>% filter(name == input$graph_player) %>% inner_join(points) %>% filter(game_id <= input$as_of_game), linewidth=5, color='black')
-  )
+  ))
 
   gg = reactive(girafe(ggobj = gg1(), options = list(opts_hover(css = "stroke: black; stroke-width: 5px;"), opts_hover_inv(css = "opacity:0.1;"))))
 
@@ -98,6 +100,7 @@ server = function(input, output, session) {
   ## GAMES
 
   output$games_tbl = renderReactable(
+    suppressMessages(
     games %>%
       left_join(scores) %>%
       relocate(is_played, 1) %>%
@@ -113,7 +116,7 @@ server = function(input, output, session) {
       left_join(scores) %>%
       mutate(game = case_when(is.na(team_1) ~ NA_character_, T ~ team_1 %,,% "-" %,,% team_2)) %>%
       mutate(result = case_when(!is_played ~ NA_character_, round == 1 ~ score_1 %,% " - " %,% score_2, T ~ result)) %>%
-      select(is_played, round, points_available, game_id, date, location, game,  result, total_points, avg_points, perc_got_points) %>%
+      select(is_played, round, points_available, game_id, date, location, game,  result, total_points, avg_points, perc_got_points)) %>%
 
       reactable(
         columns = list(
@@ -138,6 +141,7 @@ server = function(input, output, session) {
   ## WELCOME
 
   output$welcome = renderUI({
+    suppressMessages({
     lucrative_game = points %>% group_by(game_id) %>% summarise(points = sum(points)) %>% arrange(desc(points)) %>% slice_head(n=1) %>% inner_join(games)
     lucrative_team = bind_rows(points %>% inner_join(games) %>% select(team = team_1, points), points %>% inner_join(games) %>% select(team = team_2, points)) %>% group_by(team) %>% summarise(points = sum(points)) %>% arrange(desc(points))
 
@@ -157,7 +161,20 @@ server = function(input, output, session) {
       br(),
       layout_column_wrap(width = 1/3, !!!vbs, fill = F)
     )
-    })
+    })})
+
+
+  # flip to correct page in tables
+  # observeEvent(input$games_tbl, {
+  #   req(input$games_tbl)
+  #   print('hello')
+  #   updateReactable("games_tbl", page=ceiling(last_game / 10))
+  # })
+
+    # walk(players$player_id, function(id) updateReactable("#it_" %,% id, page=ceiling(last_game / 10)))
+
+  updateReactable("games_tbl", page=ceiling(last_game / 10))
+
 }
 
 

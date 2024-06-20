@@ -44,7 +44,7 @@ make_inner_tbl1 = function(id) {
     select(round, points_available, game_id, date, location, game, pred_game, pred_result, result,  points, total_points, rank)
 
   reactable(player_table,
-    outlined = TRUE, highlight = TRUE, searchable = TRUE, fullWidth = FALSE, columns = list(
+      elementId = "it_" %,% id, outlined = TRUE, highlight = TRUE, searchable = TRUE, fullWidth = FALSE, columns = list(
       game_id = colDef(header = "game #"),
       location = colDef(minWidth = 200),
       game = colDef(na = "", cell = function(value) {

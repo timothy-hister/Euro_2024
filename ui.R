@@ -11,16 +11,6 @@ credentials <- data.frame(
 
 ui = page_sidebar(
   shinyjs::useShinyjs(),
-  tags$script(
-    "
-    // Custom JavaScript function to navigate to the second page
-    function goToSecondPage(tableId) {
-      setTimeout(function() {
-        $('#' + tableId + ' .rt-tbody .-page-2').click();
-      }, 500); // Adjust the timeout as needed
-    }
-    "
-  ),
   theme = bs_theme(bootswatch = "minty"),
   title = "Euro 2024",
   sidebar = list(

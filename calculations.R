@@ -44,6 +44,7 @@ if (params$scrape) {
   if (nrow(played_games_wo_scores) > 0) {
     new_scores = get_new_scores()
     print("what?")
+    print(new_scores)
     print(scores)
     scores = bind_rows(scores, new_scores) %>% na.omit()
     print(scores)
@@ -73,8 +74,8 @@ preds = bind_rows(readRDS(here::here() %,% "/results/round_1_preds.Rds"), readRD
 ## POINTS
 
 if (last_round %in% 0:1) points = games %>%
-  inner_join(scores) %>%
-  inner_join(preds) %>%
+  inner_join(scores, by = join_by(round, game_id, team_1, team_2)) %>%
+  inner_join(preds, by = join_by(round, game_id)) %>%
   arrange(player_id, round, game_id) %>%
   rowwise() %>%
   mutate(points = calc_points(round, score_1, score_2, pred_score_1, pred_score_2, points_available)) %>%
@@ -90,7 +91,7 @@ if (last_round %in% 0:1) points = games %>%
 
 if (last_round %in% 0:1) {
   max_points_left = games %>%
-    inner_join(preds) %>%
+    inner_join(preds, by = join_by(round, game_id)) %>%
     group_by(player_id) %>%
     arrange(player_id, desc(game_id)) %>%
     mutate(max_points_left = cumsum(points_available) - points_available) %>%
@@ -104,10 +105,10 @@ if (last_round %in% 0:1) {
 
 standings = points %>%
   na.omit() %>%
-  inner_join(players) %>%
-  inner_join(games) %>%
+  inner_join(players, by = join_by(player_id)) %>%
+  inner_join(games, by = join_by(round, game_id)) %>%
   arrange(game_id) %>%
-  inner_join(max_points_left) %>%
+  inner_join(max_points_left, by = join_by(player_id, round, game_id)) %>%
   mutate(max_points = total_points + max_points_left) %>%
   select(game_id, player_id, rank, total_points, max_points)
 
