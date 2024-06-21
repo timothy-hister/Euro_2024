@@ -37,36 +37,7 @@ all_locations = sort(unique(games$location))
 last_games_of_day = c(0, games %>% group_by(date) %>% slice_tail(n=1) %>% pull(game_id))
 last_games_of_day = games %>% rowwise() %>% mutate(prev_game_id = as.integer(max(last_games_of_day[last_games_of_day < game_id]))) %>% ungroup() %>% select(game_id, prev_game_id)
 
-## SCRAPE NEW SCORES
-
-if (params$scrape) {
-  played_games_wo_scores = games %>% filter(!is_played) #%>% filter(date <= today() + 1)
-  if (nrow(played_games_wo_scores) > 0) {
-    new_scores = get_new_scores()
-    print("what?")
-    print(new_scores)
-    print(scores)
-    scores = bind_rows(scores, new_scores) %>% na.omit()
-    print(scores)
-    if (nrow(new_scores) > 0) {
-      if (is_local) {
-        tryCatch({
-          write_csv2(scores, "results/scores.csv")
-          repo = git2r::repository()
-          git2r::add(repo, "results/scores.csv")
-          git2r::commit(repo, "Updating scores")
-          system("git push")
-        }, error=function(e) message(e))
-      }
-    }
-    last_game = if (nrow(scores) > 0) max(scores$game_id) else 0L
-    last_round = if (nrow(scores) > 0) max(scores$round) else 0L
-    games = games %>% mutate(is_played = game_id <= last_game)
-  }
-}
-
 ## PREDICTIONS
-
 
 preds = bind_rows(readRDS(here::here() %,% "/results/round_1_preds.Rds"), readRDS(here::here() %,% "/results/round_2_preds.Rds")) %>%
   arrange(player_id, round, game_id)

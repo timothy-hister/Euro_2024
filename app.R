@@ -11,6 +11,34 @@ source(here::here() %,% "/calculations.R", local = T)
 source(here::here() %,% "/ui.R", local = T)
 
 server = function(input, output, session) {
+
+  ## SCRAPE NEW SCORES
+  observe({
+    if (params$scrape) {
+      played_games_wo_scores = games %>% filter(!is_played) #%>% filter(date <= today() + 1)
+      if (nrow(played_games_wo_scores) > 0) {
+        new_scores = get_new_scores()
+        scores = bind_rows(scores, new_scores) %>% na.omit()
+        if (nrow(new_scores) > 0) {
+          print("New score found!")
+          print(new_scores)
+          if (is_local) {
+            tryCatch({
+              write_csv2(scores, "results/scores.csv")
+              repo = git2r::repository()
+              git2r::add(repo, "results/scores.csv")
+              git2r::commit(repo, "Updating scores")
+              system("git push")
+            }, error=function(e) message(e))
+          }
+          last_game <<- if (nrow(scores) > 0) max(scores$game_id) else 0L
+          last_round <<- if (nrow(scores) > 0) max(scores$round) else 0L
+          games <<- games %>% mutate(is_played = game_id <= last_game)
+        }
+      }
+    }
+  })
+
   shinyjs::hide(id = "teams")
   shinyjs::hide(id = "locations")
 
@@ -28,6 +56,7 @@ server = function(input, output, session) {
   }
 
   observeEvent(input$navbar, if (input$navbar == "Fun Graph") show("graph_player") else hide("graph_player"))
+  observeEvent(input$navbar, if (input$navbar == "Games") hide(c("players", "as_of_game")) else show(c("players", "as_of_game")))
 
   prev_game = reactive(last_games_of_day %>% filter(game_id == req(input$as_of_game)) %>% pull(prev_game_id))
 
