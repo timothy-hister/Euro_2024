@@ -13,60 +13,6 @@ source(here::here() %,% "/ui.R", local = T)
 
 server = function(input, output, session) {
 
-
-  ## SCORES
-
-  scores = reactive(
-    tryCatch(read.csv2("https://raw.githubusercontent.com/timothy-hister/Euro_2024/main/results/scores.csv"), error = function(e) read.csv2(here::here() %,% "/results/scores.csv")) %>%
-      as_tibble() %>%
-      unique()
-  )
-
-  last_game = reactive(if (nrow(scores()) > 0) max(scores()$game_id) else 0L)
-  last_round = if (nrow(scores()) > 0) max(scores()$round) else 0L
-
-  ## GAMES
-
-  games = reactive(
-    readxl::read_excel(here::here() %,% "/inputs/games.xlsx") %>%
-      as_tibble() %>%
-      unique() %>%
-      mutate(is_played = game_id <= last_game())
-  )
-
-  all_teams = reactive(c(games$team_1, games$team_2) %>% unique() %>% sort())
-  all_locations = reactive(sort(unique(games$location)))
-  last_games_of_day = reactive(c(0, games %>% group_by(date) %>% slice_tail(n=1) %>% pull(game_id)))
-  last_games_of_day = reactive(games %>% rowwise() %>% mutate(prev_game_id = as.integer(max(last_games_of_day[last_games_of_day < game_id]))) %>% ungroup() %>% select(game_id, prev_game_id))
-
-
-  ## SCRAPE NEW SCORES
-  scores = reactive({
-    if (params$scrape) {
-      new_scores = get_new_scores()
-      if (nrow(new_scores) > 0) {
-        print("New score found!")
-        print(new_scores)
-        if (is_local) {
-          tryCatch({
-            write_csv2(scores, "results/scores.csv")
-            repo = git2r::repository()
-            git2r::add(repo, "results/scores.csv")
-            git2r::commit(repo, "Updating scores")
-            system("git push")
-          }, error=function(e) message(e))
-        }
-      bind_rows(scores(), new_scores) %>% na.omit()
-      }
-    }
-  })
-
-  shinyjs::hide(id = "teams")
-  shinyjs::hide(id = "locations")
-
-  #if (!is_local) nav_remove(id = "navbar", target = "Prints")
-  #nav_select(id = "navbar", selected = "Welcome")
-
   if (params$authenticate) {
     res_auth <- secure_server(
       check_credentials = check_credentials(credentials)
@@ -77,26 +23,104 @@ server = function(input, output, session) {
     })
   }
 
+  shinyjs::hide(id = "teams")
+  shinyjs::hide(id = "locations")
+
   observeEvent(input$navbar, if (input$navbar == "Fun Graph") show("graph_player") else hide("graph_player"))
   observeEvent(input$navbar, if (input$navbar == "Games") hide(c("players", "as_of_game")) else show(c("players", "as_of_game")))
 
-  prev_game = reactive(last_games_of_day %>% filter(game_id == req(input$as_of_game)) %>% pull(prev_game_id))
+  observe(updateSliderTextInput(session, "as_of_game", selected = last_game(), choices = 0:last_game()))
 
-  last_rank = reactive(if (req(input$as_of_game) == 0) {
-    select(players, player_id) %>% mutate(last_rank = 1L)
-    } else {
-      standings %>%
-        filter(game_id == prev_game()) %>%
-        select(player_id, last_rank = rank) # work????
+
+  ## SCORES
+  scores = reactive({
+    if (!params$scrape) return(scores_old)
+    new_scores = get_new_scores() %>% anti_join(scores_old)
+    if (nrow(new_scores) == 0) return(scores_old)
+    print("New score found!")
+    print(new_scores)
+    all_scores = bind_rows(scores_old, new_scores) %>% na.omit()
+    if (is_local) {
+      tryCatch({
+        write_csv2(all_scores, "results/scores.csv")
+        repo = git2r::repository()
+        git2r::add(repo, "results/scores.csv")
+        git2r::commit(repo, "Updating scores")
+        system("git push")
+      }, error=function(e) message(e))
     }
+  return(all_scores)
+  })
+
+  last_game = reactive(if (nrow(scores()) > 0) max(scores()$game_id) else 0L)
+  last_round = reactive(if (nrow(scores()) > 0) max(scores()$round) else 0L)
+
+  ## POINTS
+
+  points = reactive(
+    games %>%
+      inner_join(scores(), by = join_by(round, game_id, team_1, team_2)) %>%
+      inner_join(preds, by = join_by(round, game_id)) %>%
+      arrange(player_id, round, game_id) %>%
+      rowwise() %>%
+      mutate(points = calc_points(round, score_1, score_2, pred_score_1, pred_score_2, points_available)) %>%
+      group_by(player_id) %>%
+      mutate(total_points = cumsum(points)) %>%
+      ungroup() %>%
+      group_by(game_id) %>%
+      mutate(rank = dense_rank(desc(total_points))) %>%
+      ungroup() %>%
+      select(player_id, round, game_id, points, total_points, rank)
   )
 
+  ## MAX POINTS LEFT
+
+  max_points_left = reactive(
+    games %>%
+      inner_join(preds, by = join_by(round, game_id)) %>%
+      group_by(player_id) %>%
+      arrange(player_id, desc(game_id)) %>%
+      mutate(max_points_left = cumsum(points_available) - points_available) %>%
+      ungroup() %>%
+      select(player_id, round, game_id, max_points_left) %>%
+      arrange(player_id, game_id)
+  )
+
+  ## STANDINGS
+
+  standings = reactive(
+    bind_rows(
+      players %>%
+        select(player_id) %>%
+        mutate(game_id = 0L, .before=1) %>%
+        mutate(rank = 1L, total_points = 0L, max_points = sum(games$points_available)),
+    points() %>%
+      na.omit() %>%
+      inner_join(players, by = join_by(player_id)) %>%
+      inner_join(games, by = join_by(round, game_id)) %>%
+      arrange(game_id) %>%
+      inner_join(max_points_left(), by = join_by(player_id, round, game_id)) %>%
+      mutate(max_points = total_points + max_points_left) %>%
+      select(game_id, player_id, rank, total_points, max_points)
+    )
+  )
+
+  ## LAST RANK
+
+  prev_game = reactive(last_games_of_day %>% filter(game_id == req(input$as_of_game)) %>% pull(prev_game_id))
+  last_rank = reactive(if (req(input$as_of_game) == 0) {
+    select(players, player_id) %>% mutate(last_rank = 1L)
+  } else {
+    standings() %>%
+      filter(game_id == prev_game()) %>%
+      select(player_id, last_rank = rank) # work????
+  }
+  )
 
   ## STANDINGS
 
   standings_tbl1 = reactive(
-    suppressMessages(
-    standings %>%
+    standings() %>%
         inner_join(players) %>%
         filter(name %in% input$players) %>%
         left_join(games) %>%
@@ -111,11 +135,9 @@ server = function(input, output, session) {
         mutate(rank_change = last_rank - rank) %>%
         select(player_id, rank, rank_change, nickname, total_points, last_rank, max_points) %>%
         rename(name = nickname)
-  ))
+  )
 
-  #output$standings_tbl1 = renderTable(standings_tbl1())
-
-  t1 = reactive(reactable(standings_tbl1(), columns = t1_cols(standings_tbl1()), searchable = TRUE, highlight = TRUE, onClick = 'expand', defaultPageSize = nrow(players), rowStyle = list(cursor = "pointer"), defaultExpanded = F, details = function(index) inner_tables_list[[standings_tbl1()$player_id[index]]]))
+  t1 = reactive(reactable(standings_tbl1(), columns = t1_cols(standings_tbl1()), searchable = TRUE, highlight = TRUE, onClick = 'expand', defaultPageSize = nrow(players), rowStyle = list(cursor = "pointer"), defaultExpanded = F, details = function(index) make_inner_tbl1(standings_tbl1()$player_id[index], scores(), points(), last_round())))
 
   output$standings = renderReactable(t1())
 
@@ -126,7 +148,7 @@ server = function(input, output, session) {
     suppressMessages(
     players %>%
       filter(name %in% input$players) %>%
-      inner_join(points) %>%
+      inner_join(points()) %>%
       filter(game_id <= input$as_of_game) %>%
       #mutate(name = factor(name, ordered = T)) %>%
       ggplot(aes(x = game_id, y = total_points, color = name, alpha=.5)) +
@@ -137,10 +159,10 @@ server = function(input, output, session) {
       ggthemes::theme_clean() +
       labs(x = "Game #", y = "Total Points", color = NULL, alpha = NULL, linewidth = NULL) +
       guides(alpha = 'none') +
-      scale_x_continuous(breaks = scores$game_id) +
+      scale_x_continuous(breaks = scores()$game_id) +
       scale_color_viridis_d(option = 'rocket') +
       theme(legend.position = ifelse(length(input$players) <= 5, 'right', 'none')) +
-      geom_line(data = players %>% filter(name == input$graph_player) %>% inner_join(points) %>% filter(game_id <= input$as_of_game), linewidth=5, color='black')
+      geom_line(data = players %>% filter(name == input$graph_player) %>% inner_join(points()) %>% filter(game_id <= input$as_of_game), linewidth=5, color='black')
   ))
 
   gg = reactive(girafe(ggobj = gg1(), options = list(opts_hover(css = "stroke: black; stroke-width: 5px;"), opts_hover_inv(css = "opacity:0.1;"))))
@@ -153,9 +175,8 @@ server = function(input, output, session) {
   output$games_tbl = renderReactable(
     suppressMessages(
     games %>%
-      left_join(scores) %>%
-      relocate(is_played, 1) %>%
-      left_join(points) %>%
+      left_join(scores()) %>%
+      left_join(points()) %>%
       group_by(round, game_id) %>%
       summarise(
         total_points = sum(points),
@@ -164,7 +185,8 @@ server = function(input, output, session) {
       ) %>%
       ungroup() %>%
       right_join(games) %>%
-      left_join(scores) %>%
+      left_join(scores()) %>%
+      mutate(is_played = !is.na(score_1)) %>%
       mutate(game = case_when(is.na(team_1) ~ NA_character_, T ~ team_1 %,,% "-" %,,% team_2)) %>%
       mutate(result = case_when(!is_played ~ NA_character_, round == 1 ~ score_1 %,% " - " %,% score_2, T ~ result)) %>%
       select(is_played, round, points_available, game_id, date, location, game,  result, total_points, avg_points, perc_got_points)) %>%
@@ -182,26 +204,25 @@ server = function(input, output, session) {
                 print_flag(word(value, 3))
             )
           }, minWidth = 150)
-        ),
-        rowStyle = function(index) if (!games$is_played[index]) list(background = "rgba(0, 0, 0, 0.05)")
+        )
+        #rowStyle = function(index) if (!games$is_played[index]) list(background = "rgba(0, 0, 0, 0.05)")
     )
   )
 
-  #updateReactable("games_tbl", data = cars)
 
   ## WELCOME
 
   output$welcome = renderUI({
     suppressMessages({
-    lucrative_game = points %>% group_by(game_id) %>% summarise(points = sum(points)) %>% arrange(desc(points)) %>% slice_head(n=1) %>% inner_join(games)
-    lucrative_team = bind_rows(points %>% inner_join(games) %>% select(team = team_1, points), points %>% inner_join(games) %>% select(team = team_2, points)) %>% group_by(team) %>% summarise(points = sum(points)) %>% arrange(desc(points))
+    lucrative_game = points() %>% group_by(game_id) %>% summarise(points = sum(points)) %>% arrange(desc(points)) %>% slice_head(n=1) %>% inner_join(games)
+    lucrative_team = bind_rows(points() %>% inner_join(games) %>% select(team = team_1, points), points() %>% inner_join(games) %>% select(team = team_2, points)) %>% group_by(team) %>% summarise(points = sum(points)) %>% arrange(desc(points))
 
 
     vbs = list(
-      value_box(title = "Number of Games Played", value = nrow(filter(games, is_played)), theme = "bg-gradient-purple-pink"),
-      value_box(title = "Current Leader(s)", value = standings %>% filter(game_id == last_game) %>% filter(rank == 1) %>% inner_join(players) %>% pull(name) %>% paste(collapse=", "), p("With an impressive" %,,% (standings %>% filter(game_id == last_game) %>% filter(rank == 1) %>% inner_join(players) %>% pull(total_points)) %,,% "points"), theme = "bg-gradient-green-teal"),
-      value_box(title = "Current 'Most Room For Improvement(s)'", value = standings %>% filter(game_id == last_game) %>% filter(rank == standings %>% filter(game_id == last_game) %>% pull(rank) %>% max()) %>% inner_join(players) %>% pull(name) %>% paste(collapse=", "), p("With a great-work-but-you-can-do-better!" %,,% (standings %>% filter(game_id == last_game) %>% filter(rank == standings %>% filter(game_id == last_game) %>% pull(rank) %>% max()) %>% inner_join(players) %>% pull(total_points) %>% unique()) %,,% "points"), theme = "bg-gradient-purple-red"),
-      value_box(title = "Average # of Points Received Per Game", value = round(mean(points$points), 2), theme = "bg-gradient-cyan-purple"),
+      value_box(title = "Number of Games Played", value = nrow(games %>% inner_join(scores())), theme = "bg-gradient-purple-pink"),
+      value_box(title = "Current Leader(s)", value = standings() %>% filter(game_id == last_game()) %>% filter(rank == 1) %>% inner_join(players) %>% pull(name) %>% paste(collapse=", "), p("With an impressive" %,,% (standings() %>% filter(game_id == last_game()) %>% filter(rank == 1) %>% inner_join(players) %>% pull(total_points)) %,,% "points"), theme = "bg-gradient-green-teal"),
+      value_box(title = "Current 'Most Room For Improvement(s)'", value = standings() %>% filter(game_id == last_game()) %>% filter(rank == standings() %>% filter(game_id == last_game()) %>% pull(rank) %>% max()) %>% inner_join(players) %>% pull(name) %>% paste(collapse=", "), p("With a great-work-but-you-can-do-better!" %,,% (standings() %>% filter(game_id == last_game()) %>% filter(rank == standings() %>% filter(game_id == last_game()) %>% pull(rank) %>% max()) %>% inner_join(players) %>% pull(total_points) %>% unique()) %,,% "points"), theme = "bg-gradient-purple-red"),
+      value_box(title = "Average # of Points Received Per Game", value = round(mean(points()$points), 2), theme = "bg-gradient-cyan-purple"),
       value_box(title = "Most Lucrative Game So Far", value = lucrative_game$team_1 %,,% "versus" %,,% lucrative_game$team_2, p(lucrative_game$points %,,% "points received"), theme = "bg-gradient-blue-orange"),
       value_box(title = "Most Lucrative Team(s)", value = lucrative_team %>% filter(points == max(lucrative_team$points)) %>% pull(team) %>% paste(collapse = ", "), p(max(lucrative_team$points) %,,% "points received"), theme = "bg-gradient-orange-pink")
     )
@@ -214,17 +235,6 @@ server = function(input, output, session) {
     )
     })})
 
-
-  # flip to correct page in tables
-  # observeEvent(input$games_tbl, {
-  #   req(input$games_tbl)
-  #   print('hello')
-  #   updateReactable("games_tbl", page=ceiling(last_game / 10))
-  # })
-
-    # walk(players$player_id, function(id) updateReactable("#it_" %,% id, page=ceiling(last_game / 10)))
-
-  updateReactable("games_tbl", page=ceiling(last_game / 10))
 
 }
 

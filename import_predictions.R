@@ -45,4 +45,3 @@ round_2_preds = games %>%
   mutate(pred_team_1 = NA_character_, pred_team_2 = NA_character_, pred_winner = NA_character_)
 if (sum(is.na(round_2_preds) > 0)) warning("There are" %,,% sum(is.na(round_2_preds)) %,,% "NAs in Round 2 preds")
 saveRDS(round_2_preds, here::here() %,% "/results/round_2_preds.Rds")
-
