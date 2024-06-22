@@ -1,7 +1,7 @@
 is_local = Sys.getenv('SHINY_PORT') == ""
 params = list(import_round_1 = F, import_round_2 = F, import_games = F, scrape = T, authenticate = !is_local)
 
-pacman::p_load(tidyverse, gt, ggiraph, reactable, RColorBrewer, shiny, htmltools, bslib, shinyWidgets, shinymanager, shinycssloaders, rvest, shinyjs)
+pacman::p_load(tidyverse, gt, ggiraph, reactable, RColorBrewer, shiny, htmltools, bslib, shinyWidgets, shinymanager, shinycssloaders, rvest, shinyjs, shinyalert)
 
 `%,%` = function(a,b) paste0(a,b)
 `%,,%` = function(a,b) paste(a,b)
@@ -37,7 +37,7 @@ server = function(input, output, session) {
     if (!params$scrape) return(scores_old)
     new_scores = get_new_scores() %>% anti_join(scores_old)
     if (nrow(new_scores) == 0) return(scores_old)
-    print("New score found!")
+    shinyalert(title = "New score found!", type = "success")
     print(new_scores)
     all_scores = bind_rows(scores_old, new_scores) %>% na.omit()
     if (is_local) {

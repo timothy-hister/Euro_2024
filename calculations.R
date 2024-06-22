@@ -37,7 +37,7 @@ last_games_of_day = games %>% rowwise() %>% mutate(prev_game_id = as.integer(max
 all_teams = c(games$team_1, games$team_2) %>% unique() %>% sort()
 all_locations = sort(unique(games$location))
 
-## Scores
+## SCORES
 
 scores_old = tryCatch(read.csv2("https://raw.githubusercontent.com/timothy-hister/Euro_2024/main/results/scores.csv"), error = function(e) read.csv2(here::here() %,% "/results/scores.csv")) %>%
   as_tibble() %>%
