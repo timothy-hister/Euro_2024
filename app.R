@@ -33,26 +33,42 @@ server = function(input, output, session) {
 
 
   ## SCORES
-  scores = reactive(scores_old)
+  navbar_clicked = reactiveVal(0)
+  new_score_updated = reactiveVal(0)
+  observeEvent(input$navbar, {
+    navbar_clicked(navbar_clicked() + 1)
+  })
 
-  scores = eventReactive(input$navbar, {
-    if (!params$scrape) return(scores_old)
+  new_scores = eventReactive(navbar_clicked(), {
+    if (!params$scrape) return(NULL)
     new_scores = get_new_scores() %>% anti_join(scores_old)
-    if (nrow(new_scores) == 0) return(scores_old)
+    if (nrow(new_scores) == 0) return(NULL)
     shinyalert(title = "New score(s) found!", type = "success")
     print(new_scores)
-    all_scores = bind_rows(scores_old, new_scores) %>% na.omit()
+    new_score_updated(new_score_updated() + 1)
+    return(new_scores)
+  })
+
+  scores = eventReactive(new_score_updated(), {
+    print("updating scores")
+    if (is.null(new_scores())) return(scores_old)
+    all_scores = bind_rows(scores_old, new_scores()) %>% na.omit()
     if (is_local) {
       tryCatch({
         write_csv2(all_scores, "results/scores.csv")
         repo = git2r::repository()
         git2r::add(repo, "results/scores.csv")
-        git2r::commit(repo, "Updating scores")
-        system("git push")
+        if (length(git2r::status()$staged) != 0) {
+          git2r::commit(repo, "Updating scores")
+          system("git push")
+        }
       }, error=function(e) message(e))
     }
   return(all_scores)
-  }, ignoreInit = T)
+  })
+
+
+  observe(print(scores()))
 
   last_game = reactive(if (nrow(scores()) > 0) max(scores()$game_id) else 0L)
   last_round = reactive(if (nrow(scores()) > 0) max(scores()$round) else 0L)
