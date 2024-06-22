@@ -33,11 +33,13 @@ server = function(input, output, session) {
 
 
   ## SCORES
-  scores = reactive({
+  scores = reactive(scores_old)
+
+  scores = eventReactive(input$navbar, {
     if (!params$scrape) return(scores_old)
     new_scores = get_new_scores() %>% anti_join(scores_old)
     if (nrow(new_scores) == 0) return(scores_old)
-    shinyalert(title = "New score found!", type = "success")
+    shinyalert(title = "New score(s) found!", type = "success")
     print(new_scores)
     all_scores = bind_rows(scores_old, new_scores) %>% na.omit()
     if (is_local) {
@@ -50,7 +52,7 @@ server = function(input, output, session) {
       }, error=function(e) message(e))
     }
   return(all_scores)
-  })
+  }, ignoreInit = T)
 
   last_game = reactive(if (nrow(scores()) > 0) max(scores()$game_id) else 0L)
   last_round = reactive(if (nrow(scores()) > 0) max(scores()$round) else 0L)
