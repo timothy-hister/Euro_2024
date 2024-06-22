@@ -5,6 +5,7 @@ pacman::p_load(tidyverse, gt, ggiraph, reactable, RColorBrewer, shiny, htmltools
 
 `%,%` = function(a,b) paste0(a,b)
 `%,,%` = function(a,b) paste(a,b)
+pa = function(x, n=10000) if (methods::is(x, "tbl_df")) print(x, width=Inf, n=n) else rlang::with_options(max.print = n, print(x))
 
 source(here::here() %,% "/functions.R", local = T)
 source(here::here() %,% "/calculations.R", local = T)
@@ -12,29 +13,50 @@ source(here::here() %,% "/ui.R", local = T)
 
 server = function(input, output, session) {
 
+
+  ## SCORES
+
+  scores = reactive(
+    tryCatch(read.csv2("https://raw.githubusercontent.com/timothy-hister/Euro_2024/main/results/scores.csv"), error = function(e) read.csv2(here::here() %,% "/results/scores.csv")) %>%
+      as_tibble() %>%
+      unique()
+  )
+
+  last_game = reactive(if (nrow(scores()) > 0) max(scores()$game_id) else 0L)
+  last_round = if (nrow(scores()) > 0) max(scores()$round) else 0L
+
+  ## GAMES
+
+  games = reactive(
+    readxl::read_excel(here::here() %,% "/inputs/games.xlsx") %>%
+      as_tibble() %>%
+      unique() %>%
+      mutate(is_played = game_id <= last_game())
+  )
+
+  all_teams = reactive(c(games$team_1, games$team_2) %>% unique() %>% sort())
+  all_locations = reactive(sort(unique(games$location)))
+  last_games_of_day = reactive(c(0, games %>% group_by(date) %>% slice_tail(n=1) %>% pull(game_id)))
+  last_games_of_day = reactive(games %>% rowwise() %>% mutate(prev_game_id = as.integer(max(last_games_of_day[last_games_of_day < game_id]))) %>% ungroup() %>% select(game_id, prev_game_id))
+
+
   ## SCRAPE NEW SCORES
-  observe({
+  scores = reactive({
     if (params$scrape) {
-      played_games_wo_scores = games %>% filter(!is_played) #%>% filter(date <= today() + 1)
-      if (nrow(played_games_wo_scores) > 0) {
-        new_scores = get_new_scores()
-        scores = bind_rows(scores, new_scores) %>% na.omit()
-        if (nrow(new_scores) > 0) {
-          print("New score found!")
-          print(new_scores)
-          if (is_local) {
-            tryCatch({
-              write_csv2(scores, "results/scores.csv")
-              repo = git2r::repository()
-              git2r::add(repo, "results/scores.csv")
-              git2r::commit(repo, "Updating scores")
-              system("git push")
-            }, error=function(e) message(e))
-          }
-          last_game <<- if (nrow(scores) > 0) max(scores$game_id) else 0L
-          last_round <<- if (nrow(scores) > 0) max(scores$round) else 0L
-          games <<- games %>% mutate(is_played = game_id <= last_game)
+      new_scores = get_new_scores()
+      if (nrow(new_scores) > 0) {
+        print("New score found!")
+        print(new_scores)
+        if (is_local) {
+          tryCatch({
+            write_csv2(scores, "results/scores.csv")
+            repo = git2r::repository()
+            git2r::add(repo, "results/scores.csv")
+            git2r::commit(repo, "Updating scores")
+            system("git push")
+          }, error=function(e) message(e))
         }
+      bind_rows(scores(), new_scores) %>% na.omit()
       }
     }
   })

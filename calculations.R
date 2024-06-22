@@ -1,3 +1,5 @@
+###### STATICS
+
 ## PLAYERS
 
 players = readxl::read_excel(here::here() %,% "/inputs/players.xlsx") %>%
@@ -17,30 +19,28 @@ countries = read.csv2(here::here() %,% "/inputs/country.csv", header = T, sep = 
     tibble_row(country = "Türkiye", code = "TR")
   )
 
-## SCORES
-
-scores = tryCatch(read.csv2("https://raw.githubusercontent.com/timothy-hister/Euro_2024/main/results/scores.csv"), error = function(e) read.csv2(here::here() %,% "/results/scores.csv"))
-scores = scores %>% as_tibble() %>% unique()
-last_game = if (nrow(scores) > 0) max(scores$game_id) else 0L
-last_round = if (nrow(scores) > 0) max(scores$round) else 0L
-
-## GAMES
-
-games = read.csv2(here::here() %,% "/inputs/games.csv") %>%
-  as_tibble() %>%
-  unique() %>%
-  mutate(is_played = game_id <= last_game)
-
-all_teams = c(games$team_1, games$team_2) %>% unique() %>% sort()
-all_locations = sort(unique(games$location))
-
-last_games_of_day = c(0, games %>% group_by(date) %>% slice_tail(n=1) %>% pull(game_id))
-last_games_of_day = games %>% rowwise() %>% mutate(prev_game_id = as.integer(max(last_games_of_day[last_games_of_day < game_id]))) %>% ungroup() %>% select(game_id, prev_game_id)
-
 ## PREDICTIONS
 
 preds = bind_rows(readRDS(here::here() %,% "/results/round_1_preds.Rds"), readRDS(here::here() %,% "/results/round_2_preds.Rds")) %>%
   arrange(player_id, round, game_id)
+
+
+
+
+
+### REACTIVES
+
+
+
+
+
+
+
+
+
+
+
+
 
 ## POINTS
 
