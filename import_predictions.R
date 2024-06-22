@@ -25,14 +25,19 @@ round_2_preds = map(fs::dir_info(here::here() %,% "/predictions/Round_2")$path, 
     w = which(x == i, arr.ind = T)
     if (length(w) == 0) return()
     m = x[w[1]:(w[1]+4), w[2]:(w[2]+1)]
-    tibble(game_id = m[1,1], date = m[1,2], team_1 = m[2,1], team_2 = m[3,1], pred1 = m[2,2], pred2 = m[3,2], location = m[4,1])
-  }) |>
-    bind_rows() |>
+    tibble(game_id = m[1,1], date = m[1,2], pred_team_1 = m[2,1], pred_team_2 = m[3,1], pred1 = m[2,2], pred2 = m[3,2], location = m[4,1])
+  }) %>%
+    bind_rows() %>%
     mutate(game_id = as.integer(game_id)) %>%
     mutate(date = ymd("2024-" %,% word(date, 2) %,% "-" %,% word(date,1))) %>%
-    mutate(player_id = player_id)
+    mutate(player_id = player_id) %>%
+    mutate(pred_winner = case_when(pred1 == "WIN" ~ pred_team_1, T ~ pred_team_2)) %>%
+    select(game_id, player_id, date, location, pred_team_1, pred_team_2, pred_winner)
 }) %>%
   bind_rows()
+
+
+round_2_preds$round = rep(filter(games, round > 1)$round, length(fs::dir_info(here::here() %,% "/predictions/Round_2")$path))
 
 if (sum(is.na(round_2_preds) > 0)) warning("There are" %,,% sum(is.na(round_2_preds)) %,,% "NAs in Round 2 preds")
 saveRDS(round_2_preds, here::here() %,% "/results/round_2_preds.Rds")

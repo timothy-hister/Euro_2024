@@ -26,8 +26,8 @@ server = function(input, output, session) {
   shinyjs::hide(id = "teams")
   shinyjs::hide(id = "locations")
 
-  observeEvent(input$navbar, if (input$navbar == "Fun Graph") show("graph_player") else hide("graph_player"))
-  observeEvent(input$navbar, if (input$navbar == "Games") hide(c("players", "as_of_game")) else show(c("players", "as_of_game")))
+  observeEvent(input$navbar, if (input$navbar == "Fun Graph") shinyjs::show("graph_player") else shinyjs::hide("graph_player"))
+  observeEvent(input$navbar, if (input$navbar == "Games") shinyjs::hide(c("players", "as_of_game")) else shinyjs::show(c("players", "as_of_game")))
 
   observe(updateSliderTextInput(session, "as_of_game", selected = last_game(), choices = 0:last_game()))
 
@@ -35,27 +35,33 @@ server = function(input, output, session) {
   ## SCORES
   navbar_clicked = reactiveVal(0)
   new_score_updated = reactiveVal(0)
-  observeEvent(input$navbar, {
-    navbar_clicked(navbar_clicked() + 1)
-  })
+  observeEvent(input$navbar, navbar_clicked(navbar_clicked() + 1))
 
   new_scores = eventReactive(navbar_clicked(), {
     if (!params$scrape) return(NULL)
     new_scores = get_new_scores() %>% anti_join(scores_old)
     if (nrow(new_scores) == 0) return(NULL)
-    shinyalert(title = "New score(s) found!", type = "success")
-    print(new_scores)
     new_score_updated(new_score_updated() + 1)
     return(new_scores)
   })
 
+  observeEvent(new_score_updated(), {
+    if (new_score_updated() > 0) {
+      shinyalert(title = "New score(s) found!", type = "success")
+      print(new_scores)
+    }
+  })
+
   scores = eventReactive(new_score_updated(), {
-    print("updating scores")
     if (is.null(new_scores())) return(scores_old)
-    all_scores = bind_rows(scores_old, new_scores()) %>% na.omit()
+    bind_rows(scores_old, new_scores()) %>% na.omit()
+  })
+
+  observeEvent(scores(), {
+    print("scores updated")
     if (is_local) {
       tryCatch({
-        write_csv2(all_scores, "results/scores.csv")
+        write_csv2(scores(), "results/scores.csv")
         repo = git2r::repository()
         git2r::add(repo, "results/scores.csv")
         if (length(git2r::status()$staged) != 0) {
@@ -64,11 +70,7 @@ server = function(input, output, session) {
         }
       }, error=function(e) message(e))
     }
-  return(all_scores)
   })
-
-
-  observe(print(scores()))
 
   last_game = reactive(if (nrow(scores()) > 0) max(scores()$game_id) else 0L)
   last_round = reactive(if (nrow(scores()) > 0) max(scores()$round) else 0L)
