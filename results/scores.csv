@@ -11,6 +11,7 @@ round;game_id;team_1;team_2;score_1;score_2
 1;10;Austria;France;0;1
 1;11;Türkiye;Georgia;3;1
 1;12;Portugal;Czechia;2;1
+1;13;Croatia;Albania;2;2
 1;14;Germany;Hungary;2;0
 1;15;Scotland;Switzerland;1;1
 1;16;Slovenia;Serbia;1;1
@@ -24,4 +25,3 @@ round;game_id;team_1;team_2;score_1;score_2
 1;24;Belgium;Romania;2;0
 1;25;Switzerland;Germany;1;1
 1;26;Scotland;Hungary;0;1
-1;13;Croatia;Albania;2;2
