@@ -25,9 +25,11 @@ preds = bind_rows(readRDS(here::here() %,% "/results/round_1_preds.Rds"), readRD
 
 ## GAMES
 
-read.csv2("results/games.csv") %>% as_tibble()
 
-games = source(here::here() %,% "/import_games.R", local = T)$value
+
+games = tryCatch(read.csv2("https://raw.githubusercontent.com/timothy-hister/Euro_2024/main/results/games.csv"), error = function(e) read.csv2("results/games.csv")) %>%
+  as_tibble() %>%
+  select(round, game_id, points_available, date, location, team_1, team_2)
 last_games_of_day = c(0, games %>% group_by(date) %>% slice_tail(n=1) %>% pull(game_id))
 last_games_of_day = games %>% rowwise() %>% mutate(prev_game_id = as.integer(max(last_games_of_day[last_games_of_day < game_id]))) %>% ungroup() %>% select(game_id, prev_game_id)
 
