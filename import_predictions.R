@@ -8,12 +8,14 @@ round_1_preds = map(fs::dir_info(here::here() %,% "/predictions/Round_1")$path, 
     mutate(game_id = row_number()) %>%
     mutate(player_id = player_id) %>%
     inner_join(games) %>%
-    mutate(pred_winner = case_when(pred_score_1 > pred_score_2 ~ team_1, pred_score_1 < pred_score_2 ~ team_2, T ~ "tie")) %>%
+    mutate(pred_winner = case_when(pred_score_1 > pred_score_2 ~ team_1, pred_score_1 < pred_score_2 ~ team_2, T ~ NA_character_)) %>%
+    mutate(pred_loser = case_when(pred_score_1 > pred_score_2 ~ team_2, pred_score_1 < pred_score_2 ~ team_1, T ~ NA_character_)) %>%
+    mutate(pred_tie = case_when(pred_score_1 == pred_score_2 ~ T, T ~ F)) %>%
     select(round, game_id, player_id, starts_with("pred"))
 }) %>%
   bind_rows()
 
-if (sum(is.na(round_1_preds) > 0)) warning("There are" %,,% sum(is.na(round_1_preds)) %,,% "NAs in Round 1 preds")
+if (sum(is.na(select(round_1_preds, pred_score_1, pred_score_2))) > 0) warning("There are" %,,% sum(is.na(select(round_1_preds, pred_score_1, pred_score_2))) %,,% "NA(s) in Round 1 preds")
 saveRDS(round_1_preds, here::here() %,% "/results/round_1_preds.Rds")
 
 round_2_preds = map(fs::dir_info(here::here() %,% "/predictions/Round_2")$path, function(wb) {
@@ -32,7 +34,8 @@ round_2_preds = map(fs::dir_info(here::here() %,% "/predictions/Round_2")$path, 
     mutate(date = ymd("2024-" %,% word(date, 2) %,% "-" %,% word(date,1))) %>%
     mutate(player_id = player_id) %>%
     mutate(pred_winner = case_when(pred1 == "WIN" ~ pred_team_1, T ~ pred_team_2)) %>%
-    select(game_id, player_id, date, location, pred_team_1, pred_team_2, pred_winner)
+    mutate(pred_loser = case_when(pred1 == "WIN" ~ pred_team_2, T ~ pred_team_1)) %>%
+    select(game_id, player_id, date, location, pred_team_1, pred_team_2, pred_winner, pred_loser)
 }) %>%
   bind_rows()
 
