@@ -21,9 +21,11 @@ countries = read.csv2(here::here() %,% "/inputs/country.csv", header = T, sep = 
 
 preds = bind_rows(readRDS(here::here() %,% "/results/round_1_preds.Rds"), readRDS(here::here() %,% "/results/round_2_preds.Rds")) %>%
   arrange(player_id, round, game_id) %>%
-  select(round, game_id, player_id, pred_score_1, pred_score_2, pred_team_1, pred_team_2, pred_winner)
+  select(round, game_id, player_id, pred_score_1, pred_score_2, pred_team_1, pred_team_2, pred_winner, pred_loser, pred_tie)
 
 ## GAMES
+
+read.csv2("results/games.csv") %>% as_tibble()
 
 games = source(here::here() %,% "/import_games.R", local = T)$value
 last_games_of_day = c(0, games %>% group_by(date) %>% slice_tail(n=1) %>% pull(game_id))
@@ -34,12 +36,18 @@ all_locations = sort(unique(games$location))
 
 ## SCORES
 
-scores_old = tryCatch(read.csv2("https://raw.githubusercontent.com/timothy-hister/Euro_2024/main/results/scores.csv"), error = function(e) read.csv2(here::here() %,% "/results/scores.csv")) %>%
+#scores_old = tryCatch(read.csv2("https://raw.githubusercontent.com/timothy-hister/Euro_2024/main/results/scores.csv"), error = function(e) read.csv2(here::here() %,% "/results/scores.csv")) %>%
+scores_old = read.csv2(here::here() %,% "/results/scores.csv") %>%
   as_tibble() %>%
-  unique()
+  unique() %>%
+  mutate(winner = case_when(score_1 > score_2 ~ team_1, score_1 < score_2 ~ team_2, T ~ NA_character_)) %>%
+  mutate(loser = case_when(score_1 > score_2 ~ team_2, score_1 < score_2 ~ team_1, T ~ NA_character_)) %>%
+  mutate(is_tie = case_when(score_1 == score_2 ~ T, T ~ F))
 
 points_old = games %>%
-  inner_join(scores_old, by = join_by(round, game_id, team_1, team_2)) %>%
+  select(-team_1, -team_2) %>%
+#  filter(round > 1)%>%
+  inner_join(scores_old, by = join_by(round, game_id)) %>%
   inner_join(preds, by = join_by(round, game_id)) %>%
   arrange(player_id, round, game_id) %>%
   rowwise() %>%
@@ -57,6 +65,17 @@ t1 = games %>%
   select(round, game_id) %>%
   crossing(all_teams) %>%
   rename(team = all_teams)
+
+
+alive_games = preds %>%
+  filter(round > 1) %>%
+  anti_join(
+    scores_old %>%
+      filter(round > 1) %>%
+      select(game_id, loser), by = join_by(game_id <= game_id, pred_winner == loser)
+  ) %>%
+  select(round, game_id, player_id)
+
 
 t2 = games %>%
   filter(round > 1) %>%
