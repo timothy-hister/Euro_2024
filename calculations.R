@@ -19,7 +19,9 @@ countries = read.csv2(here::here() %,% "/inputs/country.csv", header = T, sep = 
 
 ## GAMES
 
-games = if (!is_local) read.csv2("https://raw.githubusercontent.com/timothy-hister/Euro_2024/main/results/games.csv") else read.csv2("results/games.csv") %>%
+games = if (!is_local) read.csv2("https://raw.githubusercontent.com/timothy-hister/Euro_2024/main/results/games.csv") else read.csv2("results/games.csv")
+
+games = games %>%
   as_tibble() %>%
   select(round, game_id, points_available, date, location, team_1, team_2, score_1, score_2) %>%
   mutate(winner = case_when(is.na(score_1) ~ NA_character_, score_1 > score_2 ~ team_1, score_1 < score_2 ~ team_2, T ~ "tie")) %>%
