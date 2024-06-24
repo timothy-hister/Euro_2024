@@ -110,8 +110,6 @@ server = function(input, output, session) {
         rename(name = nickname)
   )
 
-  #t1 = reactive(reactable(standings_tbl1(), columns = t1_cols(standings_tbl1()), searchable = TRUE, highlight = TRUE, onClick = 'expand', defaultPageSize = nrow(players), rowStyle = list(cursor = "pointer"), defaultExpanded = F, details = function(index) make_inner_tbl1(standings_tbl1()$player_id[index])))
-
   t1 = reactive(reactable(standings_tbl1(), columns = t1_cols(standings_tbl1()), searchable = TRUE, highlight = TRUE, onClick = 'expand', defaultPageSize = nrow(players), rowStyle = list(cursor = "pointer"), defaultExpanded = F, details = function(index) inner_tables[[standings_tbl1()[[index, 'player_id']]]]))
 
   output$standings = renderReactable(t1())
@@ -125,10 +123,7 @@ server = function(input, output, session) {
       filter(name %in% input$players) %>%
       inner_join(points) %>%
       filter(game_id <= input$as_of_game) %>%
-      #mutate(name = factor(name, ordered = T)) %>%
       ggplot(aes(x = game_id, y = total_points, color = name, alpha=.5)) +
-      #geom_line_interactive(aes(tooltip = nickname, data_id = name)) +
-      #geom_smooth_interactive(aes(tooltip = nickname, data_id = name)) +
       geom_line() +
       geom_point() +
       ggthemes::theme_clean() +
@@ -146,40 +141,7 @@ server = function(input, output, session) {
 
   ## GAMES
 
-  output$games_tbl = renderReactable(
-    suppressMessages(
-    games %>%
-      left_join(points) %>%
-      group_by(round, game_id) %>%
-      summarise(
-        total_points = sum(points),
-        avg_points = mean(points),
-        perc_got_points = mean(points > 0)
-      ) %>%
-      ungroup() %>%
-      right_join(games) %>%
-      mutate(is_played = !is.na(score_1)) %>%
-      mutate(game = case_when(is.na(team_1) ~ NA_character_, T ~ team_1 %,,% "-" %,,% team_2)) %>%
-      mutate(result = case_when(!is_played ~ NA_character_, round == 1 ~ score_1 %,% " - " %,% score_2, T ~ NA_character_)) %>%
-      select(is_played, round, points_available, game_id, date, location, game,  result, total_points, avg_points, perc_got_points)) %>%
-
-      reactable(
-        columns = list(
-          is_played = colDef(show = F),
-          total_points = colDef(name = "Total # of points received"),
-          avg_points = colDef(name = "Average # of points received", format = colFormat(digits = 2)),
-          perc_got_points = colDef(name = "% of players who got >=1 points", format = colFormat(percent = T, digits = 0)),
-          game = colDef(na = "", cell = function(value) {
-            div(style = "display: flex; align-items: center;",
-                print_flag(word(value, 1)),
-                if (!is.na(value)) div("V", style = "fontWeight: 600; margin: 0 10px;"),
-                print_flag(word(value, 3))
-            )
-          }, minWidth = 150)
-        )
-        #rowStyle = function(index) if (!games$is_played[index]) list(background = "rgba(0, 0, 0, 0.05)")
-    )
-  )
+  output$games_tbl = renderReactable(games_tbl)
 
 
   ## WELCOME

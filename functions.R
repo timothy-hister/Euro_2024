@@ -6,7 +6,7 @@ PuOr_pal <- function(x) {
 }
 
 print_flag = function(value) {
-  if (is.na(value)) return("")
+  if (is.na(value)) return(div(shiny::icon("question"), style = list(height = "24px", "min-width" = "32px", "align-items" = "center")))
   if (value == "tie") return(div(icon("arrows-left-right"), height="24px", alt="tie"))
   if (!value %in% countries$country) return(div(value))
 
@@ -37,36 +37,53 @@ make_inner_tbl1 = function(id) {
     inner_join(preds) %>%
     inner_join(games) %>%
     left_join(points) %>%
-    mutate(is_played = !is.na(score_1)) %>%
-    mutate(game = case_when(is.na(team_1) ~ NA_character_, T ~ team_1 %,,% "-" %,,% team_2)) %>%
-    mutate(pred_game = case_when(is.na(pred_team_1) ~ NA_character_, T ~ pred_team_1 %,,% "-" %,,% pred_team_2)) %>%
-    mutate(pred_result = case_when(round == 1 ~ pred_score_1 %,% " - " %,% pred_score_2, T ~ pred_winner)) %>%
-    mutate(result = case_when(!is_played ~ NA_character_, round == 1 ~ score_1 %,% " - " %,% score_2, T ~ NA_character_)) %>%
-    select(round, points_available, game_id, date, location, game, pred_game, pred_result, result, points, total_points, rank)
+    # mutate(game = case_when(is.na(team_1) ~ NA_character_, T ~ team_1 %,,% "-" %,,% team_2)) %>%
+    # mutate(pred_game = case_when(is.na(pred_team_1) ~ NA_character_, T ~ pred_team_1 %,,% "-" %,,% pred_team_2)) %>%
+    # mutate(pred_result = case_when(round == 1 ~ pred_score_1 %,% " - " %,% pred_score_2, T ~ pred_winner)) %>%
+    # mutate(result = case_when(!is_played ~ NA_character_, round == 1 ~ score_1 %,% " - " %,% score_2, T ~ NA_character_)) %>%
+    mutate(game = NA, pred_game = NA, pred_result = NA, result = NA) %>%
+    select(is_played, round, points_available, game_id, date, location, game, pred_game, team_1, team_2, score_1, score_2, pred_score_1, pred_score_2, pred_team_1, pred_team_2, result, pred_result, pred_winner, points, total_points, rank)
 
   reactable(player_table, outlined = TRUE, highlight = TRUE, searchable = TRUE, fullWidth = FALSE, columns = list(
-      game_id = colDef(header = "game #"),
-      location = colDef(minWidth = 200),
-      game = colDef(na = "", cell = function(value) {
-        div(style = "display: flex; align-items: center;",
-            print_flag(word(value, 1)),
-            if (!is.na(value)) div("V", style = "fontWeight: 600; margin: 0 10px;"),
-            print_flag(word(value, 3))
-        )
-      }, minWidth = 150),
-      pred_game = colDef(na = "", show = last_round > 1, cell = function(value) {
-        div(style = "display: flex; align-items: center;",
-            print_flag(word(value, 1)),
-            if (!is.na(value)) div("V", style = "fontWeight: 600; margin: 0 10px;"),
-            print_flag(word(value, 2))
-        )
-      }, minWidth = 150),
-      pred_result = colDef(header = "predicted result", na = "", cell = function(value, index) if (player_table$round[index] == 1) value else print_flag(value)),
-      result = colDef(na = "", cell = function(value, index) if (is.na(value)) "" else if (player_table$round[index] == 1) value else print_flag(value)),
-      points_available = colDef(header = "points available"),
-      total_points = colDef(header = "total points")
-    )
-  )
+    is_played = colDef(show = F),
+    team_1 = colDef(show = F),
+    team_2 = colDef(show = F),
+    score_1 = colDef(show = F),
+    score_2 = colDef(show = F),
+    pred_team_1 = colDef(show = F),
+    pred_team_2 = colDef(show = F),
+    pred_score_1 = colDef(show = F),
+    pred_score_2 = colDef(show = F),
+    pred_winner = colDef(show = F),
+    game_id = colDef(header = "game #"),
+    points_available = colDef(header = "points available"),
+    location = colDef(minWidth = 200),
+    game = colDef(cell = function(value, index) {
+      div(style = "display: flex; align-items: center;",
+          print_flag(player_table$team_1[index]),
+          div("V", style = "fontWeight: 600; margin: 0 10px;"),
+          print_flag(player_table$team_2[index])
+      )
+    }, minWidth = 150),
+    pred_game = colDef(header = "predicted game", show = round_2_ready, cell = function(value, index) {
+      if (player_table$round[index] == 1) return("")
+      if (is.na(player_table$pred_winner[index])) return("")
+      div(style = "display: flex; align-items: center;",
+          print_flag(player_table$pred_team_1[index]),
+          div("V", style = "fontWeight: 600; margin: 0 10px;"),
+          print_flag(player_table$pred_team_2[index])
+      )
+    }, minWidth = 150),
+    result = colDef(cell = function(value, index) if (player_table$is_played[index]) player_table$score_1[index] %,,% "-" %,,% player_table$score_2[index] else ""),
+    pred_result = colDef(header = "predicted result", cell = function(value, index) {
+      if (!player_table$is_played[index]) return("")
+      if (player_table$round[index] == 1) player_table$pred_score_1[index] %,,% "-" %,,% player_table$pred_score_2[index] else print_flag(player_table$pred_winner)
+    }),
+    points = colDef(cell = function(value, index) ifelse(player_table$is_played[index], value, "")),
+    total_points = colDef(header = "total points", cell = function(value, index) ifelse(player_table$is_played[index], value, "")),
+    rank = colDef(cell = function(value, index) ifelse(player_table$is_played[index], value, ""))
+  ), rowStyle = function(index) if (!games$is_played[index]) list(background = "rgba(0, 0, 0, 0.05)")
+)
   })
 }
 

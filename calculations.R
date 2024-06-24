@@ -17,12 +17,6 @@ countries = read.csv2(here::here() %,% "/inputs/country.csv", header = T, sep = 
     tibble_row(country = "Türkiye", code = "TR")
   )
 
-## PREDICTIONS
-
-preds = bind_rows(readRDS(here::here() %,% "/results/round_1_preds.Rds"), readRDS(here::here() %,% "/results/round_2_preds.Rds")) %>%
-  arrange(player_id, round, game_id) %>%
-  select(round, game_id, player_id, pred_score_1, pred_score_2, pred_team_1, pred_team_2, pred_winner, pred_loser, pred_tie)
-
 ## GAMES
 
 games = if (!is_local) read.csv2("https://raw.githubusercontent.com/timothy-hister/Euro_2024/main/results/games.csv") else read.csv2("results/games.csv") %>%
@@ -46,6 +40,17 @@ last_round = if (all(!games$is_played)) 0L else filter(games, is_played)$round %
 
 lucrative_game = points %>% group_by(game_id) %>% summarise(points = sum(points)) %>% arrange(desc(points)) %>% slice_head(n=1) %>% inner_join(games)
 lucrative_team = bind_rows(points %>% inner_join(games) %>% select(team = team_1, points), points %>% inner_join(games) %>% select(team = team_2, points)) %>% group_by(team) %>% summarise(points = sum(points)) %>% arrange(desc(points))
+
+round_2_ready = fs::file_exists(here::here() %,% "/results/round_2_preds.Rds")
+
+## PREDICTIONS
+
+preds = if (round_2_ready) bind_rows(readRDS(here::here() %,% "/results/round_1_preds.Rds"), readRDS(here::here() %,% "/results/round_2_preds.Rds")) else readRDS(here::here() %,% "/results/round_1_preds.Rds") %>% mutate(pred_team_1 = NA_character_, pred_team_2 = NA_character_)
+
+preds = games %>%
+  left_join(preds) %>%
+  arrange(player_id, round, game_id) %>%
+  select(round, game_id, player_id, pred_score_1, pred_score_2, pred_team_1, pred_team_2, pred_winner, pred_loser)
 
 ## POINTS
 
@@ -140,3 +145,37 @@ inner_tables = map(players$player_id, ~make_inner_tbl1(.))
 #   ungroup() %>%
 #   select(player_id, round, game_id, max_points_left) %>%
 #   arrange(player_id, game_id)
+
+
+
+
+games_tbl = games %>%
+  left_join(points) %>%
+  group_by(round, game_id) %>%
+  summarise(
+    total_points = sum(points),
+    avg_points = mean(points),
+    perc_got_points = mean(points > 0)
+  ) %>%
+  ungroup() %>%
+  right_join(games) %>%
+  mutate(game = NA, result = NA) %>%
+  select(is_played, round, points_available, game_id, date, location, game, result, total_points, avg_points, perc_got_points) %>%
+
+  reactable(
+    columns = list(
+      is_played = colDef(show = F),
+      total_points = colDef(name = "Total # of points received", cell = function(value, index) if(games$is_played[index]) value else ""),
+      avg_points = colDef(name = "Average # of points received", format = colFormat(digits = 2), cell = function(value, index) if(games$is_played[index]) value else ""),
+      perc_got_points = colDef(name = "% of players who got >=1 points", format = colFormat(percent = T, digits = 0), cell = function(value, index) if(games$is_played[index]) value else ""),
+      game = colDef(cell = function(value, index) {
+        div(style = "display: flex; align-items: center;",
+            print_flag(games$team_1[index]),
+            div("V", style = "fontWeight: 600; margin: 0 10px;"),
+            print_flag(games$team_2[index])
+        )
+      }, minWidth = 150),
+      result = colDef(cell = function(value, index) if (games$is_played[index]) games$score_1[index] %,,% "-" %,,% games$score_2[index] else "")
+    ),
+    rowStyle = function(index) if (!games$is_played[index]) list(background = "rgba(0, 0, 0, 0.05)")
+  )
