@@ -167,13 +167,7 @@ games_tbl = games %>%
       total_points = colDef(name = "Total # of points received", cell = function(value, index) if(games$is_played[index]) value),
       avg_points = colDef(name = "Average # of points received", cell = function(value, index) if(games$is_played[index]) round(value, 2)),
       perc_got_points = colDef(name = "% of players who got >=1 points", cell = function(value, index) if(games$is_played[index]) round(value * 100, 0) %,% "%"),
-      game = colDef(cell = function(value, index) {
-        div(style = "display: flex; justify-content: space-between;",
-            print_flag(games$team_1[index]),
-            div("V", style = "fontWeight: 600; margin: 0"),
-            print_flag(games$team_2[index])
-        )
-      }),
+      game = colDef(cell = game_cell(games$team_1, games$team_2)),
       result = colDef(cell = function(value, index) if (games$is_played[index]) games$score_1[index] %,,% "-" %,,% games$score_2[index] else "")
     ),
     rowStyle = function(index) if (!games$is_played[index]) list(background = "rgba(0, 0, 0, 0.05)")

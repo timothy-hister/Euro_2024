@@ -1,3 +1,13 @@
+game_cell = function(obj1, obj2) {
+  function(value, index) {
+    div(style = "display: flex; justify-content: space-between;",
+        print_flag(obj1[index]),
+        div("V", style = "fontWeight: 600; margin: 0"),
+        print_flag(obj2[index])
+    )
+  }
+}
+
 PuOr_pal <- function(x) {
   palette <- brewer.pal(11, "PuOr")
   ramp <- colorRamp(palette, space = "rgb")
@@ -57,25 +67,15 @@ make_inner_tbl1 = function(id) {
     game_id = colDef(header = "game #"),
     points_available = colDef(header = "points available"),
     location = colDef(minWidth = 200),
-    game = colDef(cell = function(value, index) {
-      div(style = "display: flex; justify-content: space-between;",
-          print_flag(player_table$team_1[index]),
-          div("V", style = "fontWeight: 600; margin: 0"),
-          print_flag(player_table$team_2[index])
-      )
-    }),
+    game = colDef(cell = game_cell(player_table$team_1, player_table$team_2)),
     pred_game = colDef(header = "predicted game", show = round_2_ready, cell = function(value, index) {
       if (player_table$round[index] == 1) return("")
       if (is.na(player_table$pred_winner[index])) return("")
-      div(style = "display: flex; justify-content: space-between;",
-          print_flag(player_table$pred_team_1[index]),
-          div("V", style = "fontWeight: 600; margin: 0"),
-          print_flag(player_table$pred_team_2[index])
-      )
+      game_cell(player_table$pred_team_1, player_table$pred_team_2)
     }),
     result = colDef(cell = function(value, index) if (player_table$is_played[index]) player_table$score_1[index] %,,% "-" %,,% player_table$score_2[index] else ""),
     pred_result = colDef(header = "predicted result", cell = function(value, index) {
-      if (!player_table$is_played[index]) return("")
+      #if (!player_table$is_played[index]) return("")
       if (player_table$round[index] == 1) player_table$pred_score_1[index] %,,% "-" %,,% player_table$pred_score_2[index] else print_flag(player_table$pred_winner[index])
     }),
     points = colDef(cell = function(value, index) ifelse(player_table$is_played[index], value, "")),

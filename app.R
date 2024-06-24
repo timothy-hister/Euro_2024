@@ -27,6 +27,7 @@ server = function(input, output, session) {
   shinyjs::hide(id = "locations")
 
   observeEvent(input$navbar, if (input$navbar == "Fun Graph") shinyjs::show("graph_player") else shinyjs::hide("graph_player"))
+  observeEvent(input$navbar, if (input$navbar == "Fun Graph") shinyjs::show("graph_y") else shinyjs::hide("graph_y"))
   observeEvent(input$navbar, if (input$navbar == "Games") shinyjs::hide(c("players", "as_of_game")) else shinyjs::show(c("players", "as_of_game")))
 
   ## SCORES
@@ -46,6 +47,7 @@ server = function(input, output, session) {
   observeEvent(new_score_updated(), {
     if (new_score_updated() == 0) return()
     print("scores updated")
+    games = bind_rows(games, new_scores)
     if (is_local) {
       tryCatch({
         write_csv2(select(games, round, game_id, points_available, date, location, team_1, team_2, score_1, score_2), "results/games.csv")
@@ -123,11 +125,11 @@ server = function(input, output, session) {
       filter(name %in% input$players) %>%
       inner_join(points) %>%
       filter(game_id <= input$as_of_game) %>%
-      ggplot(aes(x = game_id, y = total_points, color = name, alpha=.5)) +
+      ggplot(aes(x = game_id, y = .data[[input$graph_y]], color = name, alpha=.5)) +
       geom_line() +
       geom_point() +
       ggthemes::theme_clean() +
-      labs(x = "Game #", y = "Total Points", color = NULL, alpha = NULL, linewidth = NULL) +
+      labs(x = "Game #", y = case_match(input$graph_y, "total_points" ~ "Total Points", "rank" ~ "rank", "points" ~ "points"), color = NULL, alpha = NULL, linewidth = NULL) +
       guides(alpha = 'none') +
       theme(legend.position = 'none') +
       scale_x_continuous(breaks = 1:input$as_of_game) +
