@@ -77,12 +77,12 @@ make_inner_tbl1 = function(id) {
     result = colDef(cell = function(value, index) if (player_table$is_played[index]) player_table$score_1[index] %,,% "-" %,,% player_table$score_2[index] else ""),
     pred_result = colDef(header = "predicted result", cell = function(value, index) {
       if (!player_table$is_played[index]) return("")
-      if (player_table$round[index] == 1) player_table$pred_score_1[index] %,,% "-" %,,% player_table$pred_score_2[index] else print_flag(player_table$pred_winner)
+      if (player_table$round[index] == 1) player_table$pred_score_1[index] %,,% "-" %,,% player_table$pred_score_2[index] else print_flag(player_table$pred_winner[index])
     }),
     points = colDef(cell = function(value, index) ifelse(player_table$is_played[index], value, "")),
     total_points = colDef(header = "total points", cell = function(value, index) ifelse(player_table$is_played[index], value, "")),
     rank = colDef(cell = function(value, index) ifelse(player_table$is_played[index], value, ""))
-  ), rowStyle = function(index) if (!games$is_played[index]) list(background = "rgba(0, 0, 0, 0.05)")
+  ), rowStyle = function(index) if (!player_table$is_played[index]) list(background = "rgba(0, 0, 0, 0.05)")
 )
   })
 }

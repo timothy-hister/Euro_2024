@@ -129,6 +129,7 @@ server = function(input, output, session) {
       ggthemes::theme_clean() +
       labs(x = "Game #", y = "Total Points", color = NULL, alpha = NULL, linewidth = NULL) +
       guides(alpha = 'none') +
+      theme(legend.position = 'none') +
       scale_x_continuous(breaks = 1:input$as_of_game) +
       scale_color_viridis_d(option = 'rocket') +
       geom_line(data = players %>% filter(name == input$graph_player) %>% inner_join(points) %>% filter(game_id <= input$as_of_game), linewidth=5, color='black')

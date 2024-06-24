@@ -38,10 +38,7 @@ all_locations = sort(unique(games$location))
 last_game = if (all(!games$is_played)) 0L else filter(games, is_played)$game_id %>% max()
 last_round = if (all(!games$is_played)) 0L else filter(games, is_played)$round %>% max()
 
-lucrative_game = points %>% group_by(game_id) %>% summarise(points = sum(points)) %>% arrange(desc(points)) %>% slice_head(n=1) %>% inner_join(games)
-lucrative_team = bind_rows(points %>% inner_join(games) %>% select(team = team_1, points), points %>% inner_join(games) %>% select(team = team_2, points)) %>% group_by(team) %>% summarise(points = sum(points)) %>% arrange(desc(points))
-
-round_2_ready = fs::file_exists(here::here() %,% "/results/round_2_preds.Rds")
+round_2_ready = unname(fs::file_exists(here::here() %,% "/results/round_2_preds.Rds"))
 
 ## PREDICTIONS
 
@@ -165,9 +162,9 @@ games_tbl = games %>%
   reactable(
     columns = list(
       is_played = colDef(show = F),
-      total_points = colDef(name = "Total # of points received", cell = function(value, index) if(games$is_played[index]) value else ""),
-      avg_points = colDef(name = "Average # of points received", format = colFormat(digits = 2), cell = function(value, index) if(games$is_played[index]) value else ""),
-      perc_got_points = colDef(name = "% of players who got >=1 points", format = colFormat(percent = T, digits = 0), cell = function(value, index) if(games$is_played[index]) value else ""),
+      total_points = colDef(name = "Total # of points received", cell = function(value, index) if(games$is_played[index]) value),
+      avg_points = colDef(name = "Average # of points received", cell = function(value, index) if(games$is_played[index]) round(value, 2)),
+      perc_got_points = colDef(name = "% of players who got >=1 points", cell = function(value, index) if(games$is_played[index]) round(value * 100, 0) %,% "%"),
       game = colDef(cell = function(value, index) {
         div(style = "display: flex; align-items: center;",
             print_flag(games$team_1[index]),
@@ -179,3 +176,7 @@ games_tbl = games %>%
     ),
     rowStyle = function(index) if (!games$is_played[index]) list(background = "rgba(0, 0, 0, 0.05)")
   )
+
+lucrative_game = points %>% group_by(game_id) %>% summarise(points = sum(points)) %>% arrange(desc(points)) %>% slice_head(n=1) %>% inner_join(games)
+lucrative_team = bind_rows(points %>% inner_join(games) %>% select(team = team_1, points), points %>% inner_join(games) %>% select(team = team_2, points)) %>% group_by(team) %>% summarise(points = sum(points)) %>% arrange(desc(points))
+
