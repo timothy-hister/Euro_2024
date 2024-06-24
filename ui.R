@@ -16,7 +16,7 @@ ui = page_sidebar(
   sidebar = list(
     img(src='logo.jpg'),
     virtualSelectInput("players", "Choose Your Players", choices = players$name, selected = players$name, multiple = T, width = "100%", dropboxWrapper = "body"),
-    sliderTextInput("as_of_game", "Choose The Game Number", choices = 0:51, selected = 51),
+    sliderTextInput("as_of_game", "Choose The Game Number", choices = 0:last_game, selected = last_game),
     virtualSelectInput("graph_player", "Choose Your Player to See", choices = players$name, selected = filter(players, name == sample(players$name, 1))$name, multiple = F, width = "100%", dropboxWrapper = "body"),
     #p("For the supremely dorky of you..."),
     pickerInput("teams", "Choose Your Teams", choices = all_teams, selected = all_teams, multiple = T, options = pickerOptions(container = "body"), width = "100%"),

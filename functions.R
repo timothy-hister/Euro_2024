@@ -31,17 +31,17 @@ calc_points = function(round, score_1, score_2, prediction_1, prediction_2, poin
   )
 }
 
-make_inner_tbl1 = function(id, scores, points, last_round) {
+make_inner_tbl1 = function(id) {
+  suppressMessages({
   player_table = filter(players, player_id == id) %>%
     inner_join(preds) %>%
     inner_join(games) %>%
-    left_join(scores) %>%
     left_join(points) %>%
     mutate(is_played = !is.na(score_1)) %>%
     mutate(game = case_when(is.na(team_1) ~ NA_character_, T ~ team_1 %,,% "-" %,,% team_2)) %>%
     mutate(pred_game = case_when(is.na(pred_team_1) ~ NA_character_, T ~ pred_team_1 %,,% "-" %,,% pred_team_2)) %>%
     mutate(pred_result = case_when(round == 1 ~ pred_score_1 %,% " - " %,% pred_score_2, T ~ pred_winner)) %>%
-    mutate(result = case_when(!is_played ~ NA_character_, round == 1 ~ score_1 %,% " - " %,% score_2, T ~ result)) %>%
+    mutate(result = case_when(!is_played ~ NA_character_, round == 1 ~ score_1 %,% " - " %,% score_2, T ~ NA_character_)) %>%
     select(round, points_available, game_id, date, location, game, pred_game, pred_result, result, points, total_points, rank)
 
   reactable(player_table, outlined = TRUE, highlight = TRUE, searchable = TRUE, fullWidth = FALSE, columns = list(
@@ -67,6 +67,7 @@ make_inner_tbl1 = function(id, scores, points, last_round) {
       total_points = colDef(header = "total points")
     )
   )
+  })
 }
 
 make_tbl2 = function(index) {
@@ -140,15 +141,15 @@ scrape_site = function(url) {
 get_new_scores = function() {
   new_scores = scrape_site("https://www.bbc.com/sport/football/european-championship/scores-fixtures/2024-06")
   old_scores = scrape_site("https://www.bbc.com/sport/football/european-championship/scores-fixtures/2024-06?filter=results")
-  all_scores = bind_rows(new_scores, old_scores) %>% unique()
+  all_scores = bind_rows(new_scores, old_scores) %>% unique() %>% select(team_1, team_2, score_1, score_2)
   all_scores = bind_rows(all_scores,
     all_scores %>%
-      select(2, 1, 4, 3, 5, 6, 7) %>%
-      set_names(c("team_1", "team_2", "score_2", "score_1", "winner", "loser", "is_tie"))
+      select(2, 1, 4, 3) %>%
+      set_names(c("team_1", "team_2", "score_1", "score_2"))
   )
   games %>%
     filter(date <= today()) %>%
     left_join(all_scores) %>%
     na.omit() %>%
-    select(round, game_id, team_1, team_2, score_1, score_2, winner, loser, is_tie)
+    select(round, game_id, team_1, team_2, score_1, score_2)
 }
