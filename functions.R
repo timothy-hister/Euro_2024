@@ -6,18 +6,17 @@ PuOr_pal <- function(x) {
 }
 
 print_flag = function(value) {
-  if (is.na(value)) return(div(shiny::icon("question"), style = list(height = "24px", "min-width" = "32px", "align-items" = "center")))
-  if (value == "tie") return(div(icon("arrows-left-right"), height="24px", alt="tie"))
-  if (!value %in% countries$country) return(div(value))
-
-  code = filter(countries, country == value) %>% pull(code) %>% tolower()
-  if (!fs::file_exists("www/" %,% code %,% ".svg")) {
-    flag_url = "https://cdn.jsdelivr.net/gh/lipis/flag-icon-css@master/flags/4x3/" %,% code %,% ".svg"
-    download.file(flag_url, destfile = "www/" %,% code %,% ".svg")
+  if (is.na(value)) image = shiny::icon("question", alt = "?", style = "max-width: 100%; height: auto; display: block; margin: 0 auto;") else if (value == "tie") image = icon("arrows-left-right", alt = "tie", "max-width: 100%; height: auto; display: block; margin: 0 auto;") else {
+    if (!value %in% countries$country) return(div(value))
+    code = filter(countries, country == value) %>% pull(code) %>% tolower()
+    if (!fs::file_exists("www/" %,% code %,% ".svg")) {
+      flag_url = "https://cdn.jsdelivr.net/gh/lipis/flag-icon-css@master/flags/4x3/" %,% code %,% ".svg"
+      download.file(flag_url, destfile = "www/" %,% code %,% ".svg")
+    }
+    #image = img(src = knitr::image_uri(flag_url), height = "24px", alt = flag)
+    image = img(src = code %,% ".svg", alt=value, style = "max-width: 100%; height: auto; display: block; margin: 0 auto;")
   }
-  #image = img(src = knitr::image_uri(flag_url), height = "24px", alt = flag)
-  image = img(src = code %,% ".svg", height = "24px", alt=value)
-  div(image)
+  div(image, style = "flex: 0 0 auto; width: 30px; max-width: 30px; text-align: center")
 }
 
 calc_points = function(round, score_1, score_2, prediction_1, prediction_2, points_available) {
@@ -59,21 +58,21 @@ make_inner_tbl1 = function(id) {
     points_available = colDef(header = "points available"),
     location = colDef(minWidth = 200),
     game = colDef(cell = function(value, index) {
-      div(style = "display: flex; align-items: center;",
+      div(style = "display: flex; justify-content: space-between;",
           print_flag(player_table$team_1[index]),
-          div("V", style = "fontWeight: 600; margin: 0 10px;"),
+          div("V", style = "fontWeight: 600; margin: 0"),
           print_flag(player_table$team_2[index])
       )
-    }, minWidth = 150),
+    }),
     pred_game = colDef(header = "predicted game", show = round_2_ready, cell = function(value, index) {
       if (player_table$round[index] == 1) return("")
       if (is.na(player_table$pred_winner[index])) return("")
-      div(style = "display: flex; align-items: center;",
+      div(style = "display: flex; justify-content: space-between;",
           print_flag(player_table$pred_team_1[index]),
-          div("V", style = "fontWeight: 600; margin: 0 10px;"),
+          div("V", style = "fontWeight: 600; margin: 0"),
           print_flag(player_table$pred_team_2[index])
       )
-    }, minWidth = 150),
+    }),
     result = colDef(cell = function(value, index) if (player_table$is_played[index]) player_table$score_1[index] %,,% "-" %,,% player_table$score_2[index] else ""),
     pred_result = colDef(header = "predicted result", cell = function(value, index) {
       if (!player_table$is_played[index]) return("")
