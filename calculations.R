@@ -45,8 +45,9 @@ if (is_local) {
         repo = git2r::repository()
         git2r::add(repo, "results/games.csv")
         if (length(git2r::status()$staged) != 0) {
-          git2r::commit(repo, "Updating scores")
+          git2r::commit(repo, "Updating games")
           system("git push")
+          rsconnect::restartApp("Euro_2024")
         }
       }, error=function(e) message(e))
     }
