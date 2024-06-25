@@ -25,41 +25,42 @@ server = function(input, output, session) {
 
   shinyjs::hide(id = "teams")
   shinyjs::hide(id = "locations")
-
   observeEvent(input$navbar, if (input$navbar == "Fun Graph") shinyjs::show("graph_player") else shinyjs::hide("graph_player"))
   observeEvent(input$navbar, if (input$navbar == "Fun Graph") shinyjs::show("graph_y") else shinyjs::hide("graph_y"))
   observeEvent(input$navbar, if (input$navbar == "Games") shinyjs::hide(c("players", "as_of_game")) else shinyjs::show(c("players", "as_of_game")))
 
-  ## SCORES
-  navbar_clicked = reactiveVal(0)
-  new_score_updated = reactiveVal(0)
-  observeEvent(input$navbar, navbar_clicked(navbar_clicked() + 1))
 
-  new_scores = eventReactive(navbar_clicked(), {
-    if (!params$scrape) return(NULL)
-    print("new scores?")
-    new_scores = get_new_scores() %>% anti_join(games)
-    if (nrow(new_scores) == 0) return(NULL)
-    new_score_updated(new_score_updated() + 1)
-    return(new_scores)
-  })
-
-  observeEvent(new_score_updated(), {
-    if (new_score_updated() == 0) return()
-    print("scores updated")
-    games = bind_rows(games, new_scores)
-    if (is_local) {
-      tryCatch({
-        write_csv2(select(games, round, game_id, points_available, date, location, team_1, team_2, score_1, score_2), "results/games.csv")
-        repo = git2r::repository()
-        git2r::add(repo, "results/games.csv")
-        if (length(git2r::status()$staged) != 0) {
-          git2r::commit(repo, "Updating scores")
-          system("git push")
-        }
-      }, error=function(e) message(e))
-    }
-  })
+  #
+  # ## SCORES
+  # navbar_clicked = reactiveVal(0)
+  # new_score_updated = reactiveVal(0)
+  # observeEvent(input$navbar, navbar_clicked(navbar_clicked() + 1))
+  #
+  # new_scores = eventReactive(navbar_clicked(), {
+  #   if (!params$scrape) return(NULL)
+  #   print("new scores?")
+  #   new_scores = get_new_scores() %>% anti_join(games)
+  #   if (nrow(new_scores) == 0) return(NULL)
+  #   new_score_updated(new_score_updated() + 1)
+  #   return(new_scores)
+  # })
+  #
+  # observeEvent(new_score_updated(), {
+  #   if (new_score_updated() == 0) return()
+  #   print("scores updated")
+  #   games = bind_rows(games, new_scores)
+  #   if (is_local) {
+  #     tryCatch({
+  #       write_csv2(select(games, round, game_id, points_available, date, location, team_1, team_2, score_1, score_2), "results/games.csv")
+  #       repo = git2r::repository()
+  #       git2r::add(repo, "results/games.csv")
+  #       if (length(git2r::status()$staged) != 0) {
+  #         git2r::commit(repo, "Updating scores")
+  #         system("git push")
+  #       }
+  #     }, error=function(e) message(e))
+  #   }
+  # })
 
   ## POINTS
 

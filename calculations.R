@@ -42,6 +42,28 @@ last_round = if (all(!games$is_played)) 0L else filter(games, is_played)$round %
 
 round_2_ready = unname(fs::file_exists(here::here() %,% "/results/round_2_preds.Rds"))
 
+# UPDATE GAMES WITH NEW SCORES
+if (is_local) {
+  message("checking for new scores")
+  if (params$scrape) {
+    new_scores = suppressMessages(get_new_scores() %>% anti_join(games))
+    if (nrow(new_scores) > 0) {
+      message("scores updated")
+      print(new_scores)
+      games = bind_rows(games, new_scores)
+      tryCatch({
+        write_csv2(select(games, round, game_id, points_available, date, location, team_1, team_2, score_1, score_2), "results/games.csv")
+        repo = git2r::repository()
+        git2r::add(repo, "results/games.csv")
+        if (length(git2r::status()$staged) != 0) {
+          git2r::commit(repo, "Updating scores")
+          system("git push")
+        }
+      }, error=function(e) message(e))
+    }
+  }
+}
+
 ## PREDICTIONS
 
 preds = if (round_2_ready) bind_rows(readRDS(here::here() %,% "/results/round_1_preds.Rds"), readRDS(here::here() %,% "/results/round_2_preds.Rds")) else readRDS(here::here() %,% "/results/round_1_preds.Rds") %>% mutate(pred_team_1 = NA_character_, pred_team_2 = NA_character_)
@@ -175,4 +197,18 @@ games_tbl = games %>%
 
 lucrative_game = points %>% group_by(game_id) %>% summarise(points = sum(points)) %>% arrange(desc(points)) %>% slice_head(n=1) %>% inner_join(games)
 lucrative_team = bind_rows(points %>% inner_join(games) %>% select(team = team_1, points), points %>% inner_join(games) %>% select(team = team_2, points)) %>% group_by(team) %>% summarise(points = sum(points)) %>% arrange(desc(points))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
