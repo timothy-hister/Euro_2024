@@ -23,13 +23,7 @@ games = if (!is_local) read.csv2("https://raw.githubusercontent.com/timothy-hist
 
 games = games %>%
   as_tibble() %>%
-  select(round, game_id, points_available, date, location, team_1, team_2, score_1, score_2) %>%
-  mutate(winner = case_when(is.na(score_1) ~ NA_character_, score_1 > score_2 ~ team_1, score_1 < score_2 ~ team_2, T ~ "tie")) %>%
-  mutate(loser = case_when(is.na(score_1) ~ NA_character_, score_1 > score_2 ~ team_2, score_1 < score_2 ~ team_1, T ~ "tie")) %>%
-  mutate(is_played = !is.na(score_1))
-  # mutate(winner = case_when(score_1 > score_2 ~ team_1, score_1 < score_2 ~ team_2, T ~ NA_character_)) %>%
-  # mutate(loser = case_when(score_1 > score_2 ~ team_2, score_1 < score_2 ~ team_1, T ~ NA_character_)) %>%
-  # mutate(is_tie = case_when(score_1 == score_2 ~ T, T ~ F))
+  select(round, game_id, points_available, date, location, team_1, team_2, score_1, score_2)
 
 last_games_of_day = c(0, games %>% group_by(date) %>% slice_tail(n=1) %>% pull(game_id))
 last_games_of_day = games %>% rowwise() %>% mutate(prev_game_id = as.integer(max(last_games_of_day[last_games_of_day < game_id]))) %>% ungroup() %>% select(game_id, prev_game_id)
@@ -37,16 +31,11 @@ last_games_of_day = games %>% rowwise() %>% mutate(prev_game_id = as.integer(max
 all_teams = c(games$team_1, games$team_2) %>% unique() %>% sort()
 all_locations = sort(unique(games$location))
 
-last_game = if (all(!games$is_played)) 0L else filter(games, is_played)$game_id %>% max()
-last_round = if (all(!games$is_played)) 0L else filter(games, is_played)$round %>% max()
-
-round_2_ready = unname(fs::file_exists(here::here() %,% "/results/round_2_preds.Rds"))
-
 # UPDATE GAMES WITH NEW SCORES
 if (is_local) {
   message("checking for new scores")
   if (params$scrape) {
-    new_scores = suppressMessages(get_new_scores() %>% anti_join(games))
+    new_scores = suppressMessages(scrape_scores() %>% anti_join(games))
     if (nrow(new_scores) > 0) {
       message("scores updated")
       print(new_scores)
@@ -63,6 +52,17 @@ if (is_local) {
     }
   }
 }
+
+# UPDATE GAMES
+
+games = games %>%
+  mutate(winner = case_when(is.na(score_1) ~ NA_character_, score_1 > score_2 ~ team_1, score_1 < score_2 ~ team_2, T ~ "tie")) %>%
+    mutate(loser = case_when(is.na(score_1) ~ NA_character_, score_1 > score_2 ~ team_2, score_1 < score_2 ~ team_1, T ~ "tie")) %>%
+    mutate(is_played = !is.na(score_1))
+
+last_game = if (all(!games$is_played)) 0L else filter(games, is_played)$game_id %>% max()
+last_round = if (all(!games$is_played)) 0L else filter(games, is_played)$round %>% max()
+round_2_ready = unname(fs::file_exists(here::here() %,% "/results/round_2_preds.Rds"))
 
 ## PREDICTIONS
 

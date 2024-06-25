@@ -147,25 +147,21 @@ scrape_site = function(url) {
     }) %>%
     bind_rows() %>%
     mutate(across(1:2, str_squish)) %>%
-    mutate(across(1:2, ~case_match(., "Turkey" ~ "Türkiye", "Czech Republic" ~ "Czechia", .default = .))) %>%
-    mutate(winner = case_when(score_1 > score_2 ~ team_1, score_1 < score_2 ~ team_2, T ~ NA_character_)) %>%
-    mutate(loser = case_when(score_1 > score_2 ~ team_2, score_1 < score_2 ~ team_1, T ~ NA_character_)) %>%
-    mutate(is_tie = case_when(score_1 == score_2 ~ T, T ~ F))
-    #mutate(result = case_when(score_1 > score_2 ~ team_1, score_1 == score_2 ~ "tie", T ~ team_2))
+    mutate(across(1:2, ~case_match(., "Turkey" ~ "Türkiye", "Czech Republic" ~ "Czechia", .default = .)))
 }
 
-get_new_scores = function() {
+scrape_scores = function() {
   new_scores = scrape_site("https://www.bbc.com/sport/football/european-championship/scores-fixtures/2024-06")
   old_scores = scrape_site("https://www.bbc.com/sport/football/european-championship/scores-fixtures/2024-06?filter=results")
-  all_scores = bind_rows(new_scores, old_scores) %>% unique() %>% select(team_1, team_2, score_1, score_2)
+  all_scores = bind_rows(new_scores, old_scores) %>% unique()
   all_scores = bind_rows(all_scores,
     all_scores %>%
       select(2, 1, 4, 3) %>%
       set_names(c("team_1", "team_2", "score_1", "score_2"))
   )
   games %>%
-    filter(date <= today()) %>%
+    filter(date <= today() + 1) %>%
     left_join(all_scores) %>%
     na.omit() %>%
-    select(round, game_id, team_1, team_2, score_1, score_2)
+    select(round, game_id, points_available, date, location, team_1, team_2, score_1, score_2)
 }
