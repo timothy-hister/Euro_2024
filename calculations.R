@@ -39,7 +39,11 @@ if (is_local) {
     if (nrow(new_scores) > 0) {
       message("scores updated")
       print(new_scores)
-      games = bind_rows(games, new_scores)
+      games = games %>%
+        full_join(new_scores, by = join_by(round, game_id, team_1, team_2)) |>
+        mutate(score_1 = case_when(is.na(score_1.x) ~ score_1.y, T ~ score_1.x)) |>
+        mutate(score_2 = case_when(is.na(score_2.x) ~ score_2.y, T ~ score_2.x)) |>
+        select(round, game_id, points_available, date, location, team_1, team_2, score_1, score_2)
       tryCatch({
         write_csv2(select(games, round, game_id, points_available, date, location, team_1, team_2, score_1, score_2), "results/games.csv")
         repo = git2r::repository()

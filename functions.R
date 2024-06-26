@@ -164,5 +164,5 @@ scrape_scores = function() {
     select(round, game_id, points_available, date, location, team_1, team_2) %>%
     left_join(all_scores, by=join_by(team_1, team_2)) %>%
     na.omit() %>%
-    select(round, game_id, points_available, date, location, team_1, team_2, score_1, score_2)
+    select(round, game_id, team_1, team_2, score_1, score_2)
 }
