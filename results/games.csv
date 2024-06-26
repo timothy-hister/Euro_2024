@@ -33,8 +33,8 @@ round;game_id;points_available;date;location;team_1;team_2;score_1;score_2
 1;32;3;2024-06-25;Munich;Denmark;Serbia;0;0
 1;33;3;2024-06-26;Frankfurt;Slovakia;Romania;1;1
 1;34;3;2024-06-26;Stuttgart;Ukraine;Belgium;0;0
-1;35;3;2024-06-26;Hamburg;Czechia;Türkiye;NA;NA
-1;36;3;2024-06-26;Gelsenkirchen;Georgia;Portugal;NA;NA
+1;35;3;2024-06-26;Hamburg;Czechia;Türkiye;1;2
+1;36;3;2024-06-26;Gelsenkirchen;Georgia;Portugal;2;0
 2;37;4;2024-06-29;Berlin;Switzerland;Italy;NA;NA
 2;38;4;2024-06-29;Dortmund;Germany;Denmark;NA;NA
 2;39;4;2024-06-30;Gelsenkirchen;England;NA;NA;NA
