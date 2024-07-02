@@ -42,7 +42,7 @@ round;game_id;points_available;date;location;team_1;team_2;score_1;score_2
 2;41;4;2024-07-01;Düsseldorf;France;Belgium;1;0
 2;42;4;2024-07-01;Frankfurt;Portugal;Slovenia;1;0
 2;43;4;2024-07-02;Munich;Romania;Netherlands;0;3
-2;44;4;2024-07-02;Leipzig;Austria;Türkiye;NA;NA
+2;44;4;2024-07-02;Leipzig;Austria;Türkiye;1;2
 3;45;6;2024-07-05;Stuttgart;Spain;Germany;NA;NA
 3;46;6;2024-07-05;Hamburg;Portugal;France;NA;NA
 3;47;6;2024-07-06;Düsseldorf;England;Switzerland;NA;NA
