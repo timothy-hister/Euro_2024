@@ -1,6 +1,4 @@
 is_local = Sys.getenv('SHINY_PORT') == ""
-params = list(import_round_1 = F, import_round_2 = F, import_games = F, scrape = T, authenticate = !is_local)
-
 pacman::p_load(tidyverse, gt, ggiraph, reactable, RColorBrewer, shiny, htmltools, bslib, shinyWidgets, shinymanager, shinycssloaders, rvest, shinyjs, shinyalert)
 
 `%,%` = function(a,b) paste0(a,b)
@@ -10,10 +8,11 @@ pa = function(x, n=10000) if (methods::is(x, "tbl_df")) print(x, width=Inf, n=n)
 source(here::here() %,% "/functions.R", local = T)
 source(here::here() %,% "/calculations.R", local = T)
 source(here::here() %,% "/ui.R", local = T)
+if (!is_local) ui = secure_app(ui)
 
 server = function(input, output, session) {
 
-  if (params$authenticate) {
+  if (!is_local) {
     res_auth <- secure_server(
       check_credentials = check_credentials(credentials)
     )
@@ -113,7 +112,43 @@ server = function(input, output, session) {
         rename(name = nickname)
   )
 
-  t1 = reactive(reactable(standings_tbl1(), columns = t1_cols(standings_tbl1()), searchable = TRUE, highlight = TRUE, onClick = 'expand', defaultPageSize = nrow(players), rowStyle = list(cursor = "pointer"), defaultExpanded = F, details = function(index) inner_tables[[standings_tbl1()[[index, 'player_id']]]]))
+  t1 = reactive(reactable(standings_tbl1(), columns = list(
+    name = colDef(cell = function(value, index) {
+      if (!round_2_ready) return(value)
+      flag = preds %>%
+        filter(game_id == max(games$game_id), player_id == index) %>%
+        pull(pred_winner) %>%
+        print_flag()
+      div(
+        div(flag),
+        div(value, style = list(float = "left"))
+      )
+      }),
+      player_id = colDef(show = F),
+      last_rank = colDef(show = F),
+      rank = colDef(
+        header = "",
+        width = 50,
+        cell = function(value, index) {
+          arrow = standings_tbl1()$rank_change[index]
+          image = if (arrow == 0) icon("arrow-right") else if (arrow > 0) icon("arrow-up") else icon("arrow-down")
+          color = if_else(arrow > 0, "#008000", if_else(arrow == 0, "orange", "#e00000"))
+          div(
+            div(value, style = list(float = "left", fontWeight = 600)),
+            div(image, style = list(fontWeight = 600, color=color))
+          )
+        }
+      ),
+      rank_change = colDef(show = F),
+      total_points = colDef(header = "total points", style = function(value) {
+        if (length(unique(standings_tbl1()$total_points)) == 1) return(list(fontWeight = 600))
+        normalized = (value - min(standings_tbl1()$total_points)) / (max(standings_tbl1()$total_points) - min(standings_tbl1()$total_points))
+        color = PuOr_pal(normalized)
+        list(background = color, fontWeight = 600, color = 'white')
+      }
+      ),
+      max_points = colDef(header = "maximum possible points")
+    ), searchable = TRUE, highlight = TRUE, onClick = 'expand', defaultPageSize = nrow(players), rowStyle = list(cursor = "pointer"), defaultExpanded = F, details = function(index) inner_tables[[standings_tbl1()[[index, 'player_id']]]]))
 
   output$standings = renderReactable(t1())
 
@@ -133,7 +168,7 @@ server = function(input, output, session) {
       labs(x = "Game #", y = case_match(input$graph_y, "total_points" ~ "Total Points", "rank" ~ "rank", "points" ~ "points"), color = NULL, alpha = NULL, linewidth = NULL) +
       guides(alpha = 'none') +
       theme(legend.position = 'none') +
-      scale_x_continuous(breaks = 1:input$as_of_game) +
+      #scale_x_continuous(breaks = 1:input$as_of_game) +
       scale_color_viridis_d(option = 'rocket') +
       geom_line(data = players %>% filter(name == input$graph_player) %>% inner_join(points) %>% filter(game_id <= input$as_of_game), linewidth=5, color='black')
   ))
@@ -170,6 +205,29 @@ server = function(input, output, session) {
     )
     })})
 
+
+  output$team_graph = renderGirafe({
+    g = points %>%
+      inner_join(games) %>%
+      filter(is_played) %>%
+      filter(game_id <= input$as_of_game) %>%
+      inner_join(filter(players, name %in% input$players)) %>%
+      select(team_1, team_2, points) %>%
+      pivot_longer(cols = c("team_1", "team_2")) %>%
+      rename(team = value) %>%
+      group_by(team) %>%
+      summarise(total_points = sum(points)) %>%
+      ungroup() %>%
+      arrange(total_points) %>%
+      mutate(team = fct_inorder(team)) %>%
+      ggplot(aes(y=team, x=total_points, fill=team)) +
+      geom_col() +
+      ggthemes::theme_clean() +
+      scale_fill_viridis_d() +
+      guides(fill = 'none')
+
+    girafe(ggobj = g)
+  })
 
 }
 

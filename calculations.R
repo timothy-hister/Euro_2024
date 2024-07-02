@@ -34,27 +34,25 @@ all_locations = sort(unique(games$location))
 # UPDATE GAMES WITH NEW SCORES
 if (is_local) {
   message("checking for new scores")
-  if (params$scrape) {
-    new_scores = suppressMessages(scrape_scores() %>% anti_join(games))
-    if (nrow(new_scores) > 0) {
-      message("scores updated")
-      print(new_scores)
-      games = games %>%
-        full_join(new_scores, by = join_by(round, game_id, team_1, team_2)) |>
-        mutate(score_1 = case_when(is.na(score_1.x) ~ score_1.y, T ~ score_1.x)) |>
-        mutate(score_2 = case_when(is.na(score_2.x) ~ score_2.y, T ~ score_2.x)) |>
-        select(round, game_id, points_available, date, location, team_1, team_2, score_1, score_2)
-      tryCatch({
-        write_csv2(select(games, round, game_id, points_available, date, location, team_1, team_2, score_1, score_2), "results/games.csv")
-        repo = git2r::repository()
-        git2r::add(repo, "results/games.csv")
-        if (length(git2r::status()$staged) != 0) {
-          git2r::commit(repo, "Updating games")
-          system("git push")
-          rsconnect::restartApp("Euro_2024")
-        }
-      }, error=function(e) message(e))
-    }
+  new_scores = suppressMessages(scrape_scores() %>% anti_join(games))
+  if (nrow(new_scores) > 0) {
+    message("scores updated")
+    print(new_scores)
+    games = games %>%
+      full_join(new_scores, by = join_by(round, game_id, team_1, team_2)) |>
+      mutate(score_1 = case_when(is.na(score_1.x) ~ score_1.y, T ~ score_1.x)) |>
+      mutate(score_2 = case_when(is.na(score_2.x) ~ score_2.y, T ~ score_2.x)) |>
+      select(round, game_id, points_available, date, location, team_1, team_2, score_1, score_2)
+    tryCatch({
+      write_csv2(select(games, round, game_id, points_available, date, location, team_1, team_2, score_1, score_2), "results/games.csv")
+      repo = git2r::repository()
+      git2r::add(repo, "results/games.csv")
+      if (length(git2r::status()$staged) != 0) {
+        git2r::commit(repo, "Updating games")
+        system("git push")
+        rsconnect::restartApp("Euro_2024")
+      }
+    }, error=function(e) message(e))
   }
 }
 
@@ -69,6 +67,9 @@ last_game = if (all(!games$is_played)) 0L else filter(games, is_played)$game_id 
 last_round = if (all(!games$is_played)) 0L else filter(games, is_played)$round %>% max()
 round_2_ready = unname(fs::file_exists(here::here() %,% "/results/round_2_preds.Rds"))
 
+all_r2_teams = if (round_2_ready) games %>% filter(round > 1) %>% select(team_1, team_2) %>% pivot_longer(cols=1:2) %>% na.omit() %>% pull(value) %>% sort() %>% unique()
+
+
 ## PREDICTIONS
 
 preds = if (round_2_ready) bind_rows(readRDS(here::here() %,% "/results/round_1_preds.Rds"), readRDS(here::here() %,% "/results/round_2_preds.Rds")) else readRDS(here::here() %,% "/results/round_1_preds.Rds") %>% mutate(pred_team_1 = NA_character_, pred_team_2 = NA_character_)
@@ -76,17 +77,23 @@ preds = if (round_2_ready) bind_rows(readRDS(here::here() %,% "/results/round_1_
 preds = games %>%
   left_join(preds) %>%
   arrange(player_id, round, game_id) %>%
-  select(round, game_id, player_id, pred_score_1, pred_score_2, pred_team_1, pred_team_2, pred_winner, pred_loser)
+  select(player_id, round, game_id, pred_score_1, pred_score_2, pred_team_1, pred_team_2, pred_winner, pred_loser) %>%
+  arrange(player_id, round, game_id)
 
 ## POINTS
 
 points = games %>%
   select(-team_1, -team_2) %>%
-#  filter(round > 1)%>%
   inner_join(preds, by = join_by(round, game_id)) %>%
   arrange(player_id, round, game_id) %>%
+  select(player_id, round, game_id, points_available, score_1, score_2, pred_score_1, pred_score_2, winner, pred_winner) |>
   rowwise() %>%
-  mutate(points = calc_points(round, score_1, score_2, pred_score_1, pred_score_2, points_available)) %>%
+  mutate(points =
+    case_when(
+      round == 1 ~ case_when(score_1 == pred_score_1 && score_2 == pred_score_2 ~ 3L, score_1 - score_2 == pred_score_1 - pred_score_2 ~ 2L, sign(score_1 - score_2) == sign(pred_score_1 - pred_score_2) ~ 1L, T ~ 0L),
+      # round 2+
+      T ~ case_when(pred_winner == winner ~ points_available, T ~ 0L)
+  )) |>
   group_by(player_id) %>%
   mutate(total_points = cumsum(points)) %>%
   ungroup() %>%
@@ -98,7 +105,45 @@ points = games %>%
 
 ## MAX POINTS LEFT
 
-max_points_left = games %>%
+# max_points_left = games %>%
+#   inner_join(preds, by = join_by(round, game_id)) %>%
+#   group_by(player_id) %>%
+#   arrange(player_id, desc(game_id)) %>%
+#   mutate(max_points_left = cumsum(points_available) - points_available) %>%
+#   ungroup() %>%
+#   select(player_id, round, game_id, max_points_left) %>%
+#   arrange(player_id, game_id)
+
+
+r2_max_points_left = games %>%
+  filter(round > 1) %>%
+  left_join(preds, by = join_by(round, game_id)) %>%
+  left_join(
+    preds %>%
+      filter(round > 1) %>%
+      #filter(player_id == 2) %>%
+      select(round, player_id, game_id, pred_winner) %>%
+      anti_join(
+        games %>%
+          filter(round > 1) %>%
+          select(game_id, loser) %>%
+          na.omit(), by = join_by(game_id > game_id, pred_winner == loser)
+      ) %>%
+      select(round, game_id, player_id) %>%
+      mutate(pred_winner_is_alive = T)
+  ) %>%
+  arrange(player_id, game_id) %>%
+  select(round, game_id, player_id, pred_winner, pred_winner_is_alive, points_available) %>%
+  mutate(points_available = case_when(round == 1 ~ points_available, pred_winner_is_alive ~ points_available, T ~ 0L)) %>%
+  group_by(player_id) %>%
+  arrange(player_id, desc(game_id)) %>%
+  mutate(max_points_left = cumsum(points_available) - points_available) %>%
+  arrange(player_id, game_id) %>%
+  select(player_id, round, game_id, max_points_left) %>%
+  ungroup()
+
+r1_max_points_left = games %>%
+  filter(round == 1) %>%
   inner_join(preds, by = join_by(round, game_id)) %>%
   group_by(player_id) %>%
   arrange(player_id, desc(game_id)) %>%
@@ -106,6 +151,9 @@ max_points_left = games %>%
   ungroup() %>%
   select(player_id, round, game_id, max_points_left) %>%
   arrange(player_id, game_id)
+
+max_points_left = bind_rows(r1_max_points_left, r2_max_points_left) %>%
+  arrange(player_id, round, game_id)
 
 ## STANDINGS
 
@@ -118,6 +166,7 @@ standings = bind_rows(
     na.omit() %>%
     inner_join(players, by = join_by(player_id)) %>%
     inner_join(games, by = join_by(round, game_id)) %>%
+    filter(is_played) %>%
     arrange(game_id) %>%
     inner_join(max_points_left, by = join_by(player_id, round, game_id)) %>%
     mutate(max_points = total_points + max_points_left) %>%
@@ -135,14 +184,7 @@ inner_tables = map(players$player_id, ~make_inner_tbl1(.))
 #   rename(team = all_teams)
 #
 #
-# alive_games = preds %>%
-#   filter(round > 1) %>%
-#   anti_join(
-#     scores_old %>%
-#       filter(round > 1) %>%
-#       select(game_id, loser), by = join_by(game_id <= game_id, pred_winner == loser)
-#   ) %>%
-#   select(round, game_id, player_id)
+#
 #
 #
 # t2 = games %>%
@@ -202,18 +244,3 @@ games_tbl = games %>%
 
 lucrative_game = points %>% group_by(game_id) %>% summarise(points = sum(points)) %>% arrange(desc(points)) %>% slice_head(n=1) %>% inner_join(games)
 lucrative_team = bind_rows(points %>% inner_join(games) %>% select(team = team_1, points), points %>% inner_join(games) %>% select(team = team_2, points)) %>% group_by(team) %>% summarise(points = sum(points)) %>% arrange(desc(points))
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

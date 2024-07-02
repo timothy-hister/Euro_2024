@@ -17,7 +17,10 @@ round_1_preds = map(fs::dir_info(here::here() %,% "/predictions/Round_1")$path, 
 if (sum(is.na(round_1_preds)) > 0) warning("There are" %,,% sum(is.na(round_1_preds)) %,,% "NA(s) in Round 1 preds")
 saveRDS(round_1_preds, here::here() %,% "/results/round_1_preds.Rds")
 
-if (params$import_round_2) {
+
+
+
+if (round_2_ready) {
   round_2_preds = map(fs::dir_info(here::here() %,% "/predictions/Round_2")$path, function(wb) {
     x = readxl::read_xlsx(wb)
     player_id = str_extract(wb, here::here() %,% "/(predictions/Round_2/)(\\d*)", group=2) %>% as.integer()
@@ -41,15 +44,25 @@ if (params$import_round_2) {
   round_2_preds$round = rep(filter(games, round > 1)$round, length(fs::dir_info(here::here() %,% "/predictions/Round_2")$path))
 
   if (sum(is.na(round_2_preds) > 0)) warning("There are" %,,% sum(is.na(round_2_preds)) %,,% "NAs in Round 2 preds")
-  saveRDS(round_2_preds, here::here() %,% "/results/round_2_preds.Rds")
+
+  round_2_preds = bind_rows(
+    round_2_preds,
+    players %>%
+      filter(!player_id %in% round_2_preds$player_id) %>%
+      select(player_id) %>%
+      crossing(
+        games %>% filter(round > 1) %>% select(round, game_id)
+      )
+  ) %>%
+    arrange(player_id, round, game_id)
+} else {
+  round_2_preds = games %>%
+    filter(round > 1) %>%
+    cross_join(players) %>%
+    select(round, player_id, game_id) %>%
+    mutate(pred_team_1 = NA_character_, pred_team_2 = NA_character_, pred_winner = NA_character_)
+  if (sum(is.na(round_2_preds) > 0)) warning("There are" %,,% sum(is.na(round_2_preds)) %,,% "NAs in Round 2 preds")
 
 }
 
-
-# round_2_preds = games %>%
-#   filter(round > 1) %>%
-#   cross_join(players) %>%
-#   select(round, player_id, game_id) %>%
-#   mutate(pred_team_1 = NA_character_, pred_team_2 = NA_character_, pred_winner = NA_character_)
-# if (sum(is.na(round_2_preds) > 0)) warning("There are" %,,% sum(is.na(round_2_preds)) %,,% "NAs in Round 2 preds")
-# saveRDS(round_2_preds, here::here() %,% "/results/round_2_preds.Rds")
+saveRDS(round_2_preds, here::here() %,% "/results/round_2_preds.Rds")

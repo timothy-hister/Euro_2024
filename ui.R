@@ -30,8 +30,7 @@ ui = page_sidebar(
     nav_panel("Welcome!", fluidRow(column(width = 12, uiOutput("welcome")))),
     nav_panel("Standings", withSpinner(reactableOutput("standings"))),
     nav_panel("Fun Graph", withSpinner(girafeOutput("graph", width = "100%", height = "600px"))),
+    nav_panel("Another Fun Graph", withSpinner(girafeOutput("team_graph", width = "100%", height = "600px"))),
     nav_panel("Games", withSpinner(reactableOutput("games_tbl")))
   )
 )
-
-if (params$authenticate) ui = secure_app(ui)

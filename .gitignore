@@ -9,3 +9,5 @@ knits
 *.Rds
 rsconnect
 *.dcf
+predictions
+*.xlsx
