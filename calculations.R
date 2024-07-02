@@ -121,7 +121,6 @@ r2_max_points_left = games %>%
   left_join(
     preds %>%
       filter(round > 1) %>%
-      #filter(player_id == 2) %>%
       select(round, player_id, game_id, pred_winner) %>%
       anti_join(
         games %>%
@@ -135,6 +134,7 @@ r2_max_points_left = games %>%
   arrange(player_id, game_id) %>%
   select(round, game_id, player_id, pred_winner, pred_winner_is_alive, points_available) %>%
   mutate(points_available = case_when(round == 1 ~ points_available, pred_winner_is_alive ~ points_available, T ~ 0L)) %>%
+  mutate(points_available = case_when(is.na(pred_winner) ~ 0L, T ~ points_available)) |>
   group_by(player_id) %>%
   arrange(player_id, desc(game_id)) %>%
   mutate(max_points_left = cumsum(points_available) - points_available) %>%

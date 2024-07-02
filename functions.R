@@ -140,7 +140,9 @@ scrape_site = function(url) {
   li = read_html(url) %>%
     html_elements("span") %>%
     html_text2() %>%
-    keep(~str_ends(., "(?i)at full time"))
+    #keep(~str_ends(., "(?i)at full time|on penalties")) |>
+    keep(~str_detect(., "(?i)at full time|after extra time")) |>
+    keep(~str_detect(., "\\d"))
     #keep(~str_detect(., "(?i).+\\d , .+\\d.*"))
 
   if (length(li) == 0) return()
@@ -149,8 +151,15 @@ scrape_site = function(url) {
     str_remove(",") %>%
     str_squish() %>%
     map(function(s) {
-      teams = str_split(s, "\\d")[[1]]
+      teams = str_split(s, "\\d")[[1]] |> str_squish()
       scores = str_extract_all(s, "\\d")[[1]] %>% as.integer()
+      if (str_detect(s, "penalties")) {
+        pen_winner = str_extract(s, "(.+)(win)", group=1) |>
+          str_squish() |>
+          word(-1)
+        pen_which = str_which(teams[1:2], pen_winner)
+        scores[pen_which] = scores[pen_which] + 1
+      }
       tibble(team_1 = teams[1], team_2 = teams[2], score_1 = scores[1], score_2 = scores[2])
     }) %>%
     bind_rows() %>%

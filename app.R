@@ -116,12 +116,13 @@ server = function(input, output, session) {
     name = colDef(cell = function(value, index) {
       if (!round_2_ready) return(value)
       flag = preds %>%
-        filter(game_id == max(games$game_id), player_id == index) %>%
+        filter(player_id == standings_tbl1()$player_id[index]) |>
+        filter(game_id == max(games$game_id)) %>%
         pull(pred_winner) %>%
         print_flag()
-      div(
-        div(flag),
-        div(value, style = list(float = "left"))
+      div(style = "display: flex;",
+          div(flag, style="margin-right: 10px;"),
+          print_flag(value)
       )
       }),
       player_id = colDef(show = F),
