@@ -215,8 +215,6 @@ inner_tables = map(players$player_id, ~make_inner_tbl1(.))
 #   arrange(player_id, game_id)
 
 
-
-
 games_tbl = games %>%
   left_join(points) %>%
   group_by(round, game_id) %>%
